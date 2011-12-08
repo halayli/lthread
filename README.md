@@ -28,9 +28,9 @@ Library calls
 
 ```int     lthread_create(lthread_t **new_lt, void *fun, void *arg);```
 
-    > Creates a new lthread and returns it via `*new_lt`.
+    Creates a new lthread and returns it via `*new_lt`.
 
-    > Returns 0 if success, -1 on failure.
+    Returns 0 if success, -1 on failure.
 
 ```void    lthread_destroy(lthread_t *lt);```
 
