@@ -11,7 +11,7 @@ Installation
 
 Currently, lthread is only supported on FreeBSD and Linux. OS X support will becoming soon.
 
-`cd lthread`
+`cd src`
 
 `sudo make install`
 

@@ -92,14 +92,12 @@ lthread_join()
     lthread_t *lt = NULL, *lttmp = NULL;
     int p = 0;
     int fd = 0;
-    //uint64_t t1, t2;
 
     while (sched->sleeping_state ||
         !LIST_EMPTY(&sched->new) ||
         sched->waiting_state) {
 
         /* 1. start by checking if a sleeping thread needs to wakeup */
-        //t1 = rdtsc();
         _resume_expired_lthreads(sched);
 
         /* 2. check to see if we have any new threads to run */
@@ -118,10 +116,8 @@ lthread_join()
             p = --sched->total_new_events;
             fd = get_fd(&sched->eventlist[p]);
             lt = (lthread_t *)get_data(&sched->eventlist[p]);
-            if (lt == NULL) {
+            if (lt == NULL)
                 assert(0);
-                continue;
-            }
 
             if (is_eof(&sched->eventlist[p]))
                 lt->state |= bit(LT_FDEOF);
@@ -129,8 +125,6 @@ lthread_join()
             _desched_lthread(lt);
             _lthread_resume(lt);
         }
-        //t2 = rdtsc();
-        //printf("resumed in %llu\n", tick_diff_usecs(t1, t2));
     }
 
     _sched_free(sched);
@@ -333,9 +327,6 @@ _resume_expired_lthreads(sched_t *sched)
 
         if (data->usecs <= t_diff_usecs) {
             LIST_INSERT_HEAD(&sched_list, data, next);
-            /* check if we are done yet since we are traversing
-             * the tree that we are deleting from.
-             */
             LIST_FOREACH_SAFE(lt, &data->lthreads, sleep_next, lttmp) {
                 LIST_REMOVE(lt, sleep_next);
                 lt->sched->sleeping_state--;
