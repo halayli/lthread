@@ -4,7 +4,9 @@ lthread
 Introduction
 ------------
 
-lthread is a coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads.
+lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads.
+
+lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load.
 
 Installation
 ------------
@@ -312,3 +314,11 @@ An lthread version of writev(2).
 ```int lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr);```
 
 An lthread version of FreeBSD sendfile(2).
+
+
+TODOS
+-----
+
+- aio support
+
+- Write lthread_compute, to offload cpu intensive work asynchronously.
