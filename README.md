@@ -85,6 +85,131 @@ main(int argc, char **argv)
 
 ```
 
+### An incomplete web server to illustrate some of lthread features 
+
+`gcc -I/usr/local/include -llthread test.c -o test`
+
+```C
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <lthread.h>
+
+struct cli_info {
+    /* other stuff if needed*/
+    struct sockaddr_in peer_addr;
+    int fd;
+};
+
+typedef struct cli_info cli_info_t;
+
+char *reply = "HTTP/1.0 200 OK\r\nContent-length: 11\r\n\r\nHello World";
+
+void
+http_serv(lthread_t *lt, void *arg)
+{
+    cli_info_t *cli_info = arg;
+    char *buf = NULL;
+    int ret = 0;
+    char ipstr[INET6_ADDRSTRLEN];
+
+    inet_ntop(AF_INET, &cli_info->peer_addr.sin_addr, ipstr, INET_ADDRSTRLEN);
+    printf("Accepted connection on IP %s\n", ipstr);
+
+    if ((buf = malloc(1024)) == NULL)
+        return;
+
+    /* read data from client or timeout in 5 secs */
+    ret = lthread_recv(cli_info->fd, buf, 1024, 0, 5000);
+
+    /* did we timeout before the user has sent us anything? */
+    if (ret == -2) {
+        lthread_close(cli_info->fd);
+        free(buf);
+        free(arg);
+        return;
+    }
+
+    /* reply back to user */
+    lthread_send(cli_info->fd, reply, strlen(reply), 0);
+    lthread_close(cli_info->fd);
+    free(buf);
+    free(arg);
+}
+
+void
+listener(lthread_t *lt, void *arg)
+{
+    int cli_fd = 0;
+    int lsn_fd = 0;
+    int opt = 1;
+    int ret = 0;
+    struct sockaddr_in peer_addr = {};
+    struct   sockaddr_in sin = {};
+    socklen_t addrlen = sizeof(peer_addr);
+    lthread_t *cli_lt = NULL;
+    cli_info_t *cli_info = NULL;
+    char ipstr[INET6_ADDRSTRLEN];
+
+    DEFINE_LTHREAD;
+
+    /* create listening socket */
+    lsn_fd = lthread_socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (lsn_fd == -1)
+        return;
+
+    if (setsockopt(lsn_fd, SOL_SOCKET, SO_REUSEADDR, &opt,sizeof(int)) == -1)
+        perror("failed to set SOREUSEADDR on socket");
+
+    sin.sin_family = PF_INET;
+    sin.sin_addr.s_addr = INADDR_ANY;
+    sin.sin_port = htons(3128);
+
+    /* bind to the listening port */ 
+    ret = bind(lsn_fd, (struct sockaddr *)&sin, sizeof(sin));
+    if (ret == -1) {
+        perror("Failed to bind on port 3128");
+        return;
+    }
+
+    printf("Starting listener on 3128\n");
+
+    listen(lsn_fd, 128);
+
+    while (1) {
+        /* block until a new connection arrives */
+        cli_fd = lthread_accept(lsn_fd, (struct sockaddr*)&peer_addr, &addrlen);
+        if (cli_fd == -1) {
+            perror("Failed to accept connection");
+            return;
+        }
+
+        if ((cli_info = malloc(sizeof(cli_info_t))) == NULL) {
+            close(cli_fd);
+            continue;
+        }
+        cli_info->peer_addr = peer_addr;
+        cli_info->fd = cli_fd;
+        /* launch a new lthread that takes care of this client */
+        ret = lthread_create(&cli_lt, http_serv, cli_info);
+    }
+}
+
+int
+main(int argc, char **argv)
+{
+    lthread_t *lt = NULL;
+
+    lthread_create(&lt, listener, NULL);
+    lthread_join();
+
+    return 0;
+}
+
+```
+
 
 Library calls
 -------------
