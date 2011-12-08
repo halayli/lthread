@@ -270,9 +270,6 @@ Returns a pointer to the current lthread.
 
 Sets the lthread method name to the current function. It makes debugging easier by knowing which function a specific lthread was executing.
 
-```char    *lthread_summary();```
-
-Returns a string describing all the executing lthreads and their state. This string must be freed using `free()`
 
 ###Socket related functions
 
