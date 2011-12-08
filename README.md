@@ -22,6 +22,67 @@ Usage
 
 Pass `-llthread` to gcc to use lthread in your program.
 
+Example
+-------
+
+`gcc -I/usr/local/include -llthread test.c -o test`
+
+```C
+
+    #include <lthread.h>
+    #include <stdio.h>
+    #include <sys/time.h>
+
+    void
+    a(lthread_t *lt, void *x)
+    {
+        int i = 3;
+        DEFINE_LTHREAD;
+        struct timeval t1 = {0, 0};
+        struct timeval t2 = {0, 0};
+        printf("I am in a\n");
+
+        while (i--) {
+            gettimeofday(&t1, NULL);
+            lthread_sleep(2000);
+            gettimeofday(&t2, NULL);
+            printf("a (%d): elapsed is: %ld\n",i ,t2.tv_sec - t1.tv_sec);
+        }
+        printf("a is exiting\n");
+    }
+
+    void
+    b(lthread_t *lt, void *x)
+    {
+        int i = 8;
+        DEFINE_LTHREAD;
+        struct timeval t1 = {0, 0};
+        struct timeval t2 = {0, 0};
+        printf("I am in b\n");
+
+        while (i--) {
+            gettimeofday(&t1, NULL);
+            lthread_sleep(1000);
+            gettimeofday(&t2, NULL);
+            printf("b (%d): elapsed is: %ld\n",i ,t2.tv_sec - t1.tv_sec);
+        }
+        printf("b is exiting\n");
+    }
+
+    int
+    main(int argc, char **argv)
+    {
+        lthread_t *lt = NULL;
+
+        lthread_create(&lt, a, NULL);
+        lthread_create(&lt, b, NULL);
+        lthread_join();
+
+        return 0;
+    }
+
+```
+
 
 Library calls
 -------------
