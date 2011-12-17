@@ -14,6 +14,8 @@ To run an lthread scheduler in each pthread, launch the pthread and create the l
 
 Running several schedulers, each in a pthread, allows an lthread to do more significant work with a small penalty and that is, slowing down other lthreads running in the same scheduler. The lthreads running in other schedulers will not be impacted and will be able to continue running depending on the number of cores/cpus available.
 
+Note that lthread doesn't create pthreads behind the scene, it's the responsibility of the user to create/launch pthreads. lthread only creates its schedulers inside the pthread.
+
 How the lthread scheduler works
 -------------------------------
 
