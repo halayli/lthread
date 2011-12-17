@@ -8,7 +8,18 @@ Introduction
 
 lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads.
 
-lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load.
+lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on locks as this will block the whole scheduler in the pthread.
+
+To run an lthread scheduler in each pthread, launch the pthread and create the lthreads using lthread_create() followed by lthread_join() in each pthread.
+
+Running several schedulers, each in a pthread, allows an lthread to do more significant work with a small penalty and that is, slowing down other lthreads running in the same scheduler. The lthreads running in other schedulers will not be impacted and will be able to continue running depending on the number of cores/cpus available.
+
+How the lthread scheduler works
+-------------------------------
+
+The lthread scheduler has a main stack that it uses to execute/resume lthreads on, and before an it yields, the scheduler saves the current stack state + registers into the lthread and copies it back on the scheduler stack when it resumes.
+
+The scheduler is build around epoll/kqueue and uses an rbtree to track which lthreads needs to run next.
 
 Installation
 ------------
