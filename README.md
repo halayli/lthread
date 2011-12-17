@@ -18,7 +18,7 @@ Note that lthread doesn't create pthreads behind the scene, it's the responsibil
 
 ### lthread scheduler's inner works
 
-The lthread scheduler has a main stack that it uses to execute/resume lthreads on, and before an it yields, the scheduler saves the current stack state + registers into the lthread and copies it back on the scheduler stack when it resumes.
+The lthread scheduler has a main stack that it uses to execute/resume lthreads on, and before it yields, the scheduler saves the current stack state + registers into the lthread and copies it back on the scheduler stack when it resumes.
 
 The scheduler is build around epoll/kqueue and uses an rbtree to track which lthreads needs to run next.
 
