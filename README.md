@@ -4,6 +4,8 @@ lthread
 Introduction
 ------------
 
+![](/images/lthread_scheduler.png "Lthread scheduler")
+
 lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads.
 
 lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load.
