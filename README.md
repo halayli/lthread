@@ -16,8 +16,7 @@ Running several schedulers, each in a pthread, allows an lthread to do more sign
 
 Note that lthread doesn't create pthreads behind the scene, it's the responsibility of the user to create/launch pthreads. lthread only creates its schedulers inside the pthread.
 
-How the lthread scheduler works
--------------------------------
+### lthread scheduler's inner works
 
 The lthread scheduler has a main stack that it uses to execute/resume lthreads on, and before an it yields, the scheduler saves the current stack state + registers into the lthread and copies it back on the scheduler stack when it resumes.
 
