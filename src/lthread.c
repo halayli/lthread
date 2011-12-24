@@ -39,7 +39,7 @@ static int  _restore_exec_state(lthread_t *lt);
 static int  _save_exec_state(lthread_t *lt);
 static void _lthread_init(lthread_t *lt);
 
-__thread sched_t *sched;
+pthread_key_t lthread_sched_key;
 
 int _switch(struct _cpu_state *new_state, struct _cpu_state *cur_state);
 #ifdef __i386__
@@ -47,8 +47,8 @@ __asm__ (
 "    .text                                  \n"
 "    .p2align 2,,3                          \n"
 ".globl _switch                             \n"
-"    .type _switch,@function                \n"
 "_switch:                                   \n"
+"__switch:                                  \n"
 "movl 8(%esp), %edx      # fs->%edx         \n"
 "movl %esp, 0(%edx)      # save esp         \n"
 "movl %ebp, 4(%edx)      # save ebp         \n"
@@ -73,8 +73,8 @@ __asm__ (
 "    .text                                  \n"
 "       .p2align 4,,15                                   \n"
 ".globl _switch                                          \n"
-"       .type _switch, @function                         \n"
 "_switch:                                                \n"
+"__switch:                                               \n"
 "       movq %rsp, 0(%rsi)      # save stack_pointer     \n"
 "       movq %rbp, 8(%rsi)      # save frame_pointer     \n"
 "       movq (%rsp), %rax       # save insn_pointer      \n"
@@ -127,7 +127,7 @@ _lthread_resume(lthread_t *lt)
 
     _restore_exec_state(lt);
 
-    sched->current_lthread = lt;
+    lthread_get_sched()->current_lthread = lt;
     _switch(&lt->st, &lt->sched->st);
 
     if (lt->state & bit(LT_EXITED)) {
@@ -138,9 +138,28 @@ _lthread_resume(lthread_t *lt)
     }
 }
 
+static void
+_lthread_key_destructor(void *data)
+{
+    free(data);
+}
+
+static void
+_lthread_key_create()
+{
+    if (lthread_sched_key)
+        return;
+
+    if (pthread_key_create(&lthread_sched_key, _lthread_key_destructor)) {
+        perror("Failed to allocate sched key\n");
+        return;
+    }
+}
+
 int
 lthread_init(size_t size)
 {
+    _lthread_key_create();
     return sched_create(size);
 }
 
@@ -197,47 +216,51 @@ _save_exec_state(lthread_t *lt)
 void
 _sched_free(sched_t *sched)
 {
-    free(sched->stack);
-    free(sched);
+    free(lthread_get_sched()->stack);
+    free(lthread_get_sched());
+    pthread_setspecific(lthread_sched_key, NULL);
 }
 
 int
 sched_create(size_t stack_size)
 {
+    sched_t *new_sched;
     size_t sched_stack_size = 0;
 
     sched_stack_size = stack_size ? stack_size : MAX_STACK_SIZE;
     
-    if ((sched = calloc(1, sizeof(sched_t))) == NULL) {
+    if ((new_sched = calloc(1, sizeof(sched_t))) == NULL) {
         perror("Failed to initialize scheduler\n");
         return errno;
     }
 
-    if ((sched->stack = calloc(1, sched_stack_size)) == NULL) {
-        free(sched);
+    pthread_setspecific(lthread_sched_key, new_sched);
+
+    if ((new_sched->stack = calloc(1, sched_stack_size)) == NULL) {
+        free(new_sched);
         perror("Failed to initialize scheduler\n");
         return errno;
     }
 
-    bzero(sched->stack, sched_stack_size);
+    bzero(new_sched->stack, sched_stack_size);
 
-    if ((sched->poller = create_poller()) == -1) {
+    if ((new_sched->poller = create_poller()) == -1) {
         perror("Failed to initialize poller\n");
-        _sched_free(sched);
+        _sched_free(new_sched);
         return errno;
     }
 
-    sched->stack_size = sched_stack_size;
+    new_sched->stack_size = sched_stack_size;
 
-    sched->total_lthreads = 0;
-    sched->default_timeout = 3000000u;
-    sched->waiting_state = 0;
-    sched->sleeping_state = 0;
-    sched->sleeping = RB_ROOT;
-    sched->birth = rdtsc();
-    LIST_INIT(&sched->new);
+    new_sched->total_lthreads = 0;
+    new_sched->default_timeout = 3000000u;
+    new_sched->waiting_state = 0;
+    new_sched->sleeping_state = 0;
+    new_sched->sleeping = RB_ROOT;
+    new_sched->birth = rdtsc();
+    LIST_INIT(&new_sched->new);
 
-    bzero(&sched->st, sizeof(struct _cpu_state));
+    bzero(&new_sched->st, sizeof(struct _cpu_state));
 
     return 0;
 }
@@ -252,14 +275,16 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
         return errno;
     }
 
-    if (sched == NULL)
+    _lthread_key_create();
+
+    if (lthread_get_sched() == NULL)
         sched_create(0);
 
-    lt->sched = sched;
+    lt->sched = lthread_get_sched();
     lt->stack = NULL;
     lt->stack_size = 0;
     lt->state = bit(LT_NEW);
-    lt->id = sched->total_lthreads++;
+    lt->id = lthread_get_sched()->total_lthreads++;
     lt->fun = fun;
     lt->fd_wait = -1;
     lt->arg = arg;
@@ -281,19 +306,19 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
 void
 lthread_set_data(void *data)
 {
-    sched->current_lthread->data = data;
+    lthread_get_sched()->current_lthread->data = data;
 }
 
 void *
 lthread_get_data(void)
 {
-    return sched->current_lthread->data;
+    return lthread_get_sched()->current_lthread->data;
 }
 
 lthread_t *
 lthread_current(void)
 {
-    return sched->current_lthread;
+    return lthread_get_sched()->current_lthread;
 }
 
 void
@@ -323,7 +348,7 @@ lthread_cond_create(lthread_cond_t **c)
 int
 lthread_cond_wait(lthread_cond_t *c, uint64_t timeout)
 {
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
     c->blocked_lthread = lt;
     if (timeout) {
         _sched_lthread(lt, timeout);
@@ -346,7 +371,7 @@ void
 lthread_cond_signal(lthread_cond_t *c)
 {
     if (c->blocked_lthread != NULL) {
-        LIST_INSERT_HEAD(&sched->new, c->blocked_lthread, new_next);
+        LIST_INSERT_HEAD(&lthread_get_sched()->new, c->blocked_lthread, new_next);
     }
 
     c->blocked_lthread = NULL;
@@ -355,7 +380,7 @@ lthread_cond_signal(lthread_cond_t *c)
 void
 lthread_sleep(uint64_t msecs)
 {
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
     lt->timeout = msecs;
     lt->ticks = rdtsc();
     lt->fd_wait = -1;
@@ -378,24 +403,24 @@ void lthread_wakeup(lthread_t *lt)
 int
 lthread_running()
 {
-    return sched->waiting_state;
+    return lthread_get_sched()->waiting_state;
 }
 
 int
 lthread_sleeping()
 {
-    return sched->sleeping_state;
+    return lthread_get_sched()->sleeping_state;
 }
 
 void
 lthread_set_funcname(const char *f)
 {
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
     strncpy(lt->funcname, f, 64);
 }
 
 uint64_t
 lthread_id(void)
 {
-    return sched->current_lthread->id;
+    return lthread_get_sched()->current_lthread->id;
 }
