@@ -4,7 +4,7 @@ gccflags = "-g"
 
 lthread.o: $(src)
 	gcc -Werror -fPIC -g -I ../ $(gccflags) -Wall -c $(src)
-	gcc -Werror -O2 $(gccflags) -shared -W1,-soname,liblthread.so.1 -o liblthread.so *.o
+	gcc -Werror -lpthread -O2 $(gccflags) -shared -W1,-soname,liblthread.so.1 -o liblthread.so *.o
 	ar -cvq liblthread.a *.o
 
 install: lthread.o
