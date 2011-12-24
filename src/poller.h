@@ -27,7 +27,7 @@ inline void clear_interest(int fd);
 int create_poller(void);
 inline int poll_events(struct timespec t);
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
 inline int get_event(struct kevent *ev);
 inline int get_fd(struct kevent *ev);
 inline void *get_data(struct kevent *ev);

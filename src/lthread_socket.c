@@ -39,7 +39,7 @@ int
 lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
 {
     int ret = -1;
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
 
     while (1) {
         ret = accept(fd, addr, len);
@@ -79,7 +79,7 @@ lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
 int
 lthread_close(int fd)
 {
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
     
     close(fd);
     _desched_lthread(lt);
@@ -92,6 +92,9 @@ int
 lthread_socket(int domain, int type, int protocol)
 {
     int fd;
+#if defined(__FreeBSD__) || defined(__APPLE__)
+    int set = 1;
+#endif
 
     if ((fd = socket(domain, type, protocol)) == -1) {
         perror("Failed to create a new socket");
@@ -104,6 +107,14 @@ lthread_socket(int domain, int type, int protocol)
         return -1;
     }
 
+#if defined(__FreeBSD__) || defined(__APPLE__)
+    if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(int)) == -1) {
+        close(fd);
+        perror("Failed to set socket properties");
+        return -1;
+    }
+#endif
+
     return fd;
 }
 
@@ -111,13 +122,17 @@ ssize_t
 lthread_recv(int fd, void *buffer, size_t length, int flags, long timeout)
 {
     ssize_t ret = 0;
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
 
     while (1) {
         if (lt->state & bit(LT_FDEOF))
             return -1;
 
+#if defined(__FreeBSD__) || defined(__APPLE__)
+        ret = recv(fd, buffer, length, flags);
+#else
         ret = recv(fd, buffer, length, flags | MSG_NOSIGNAL);
+#endif
 
         if (ret == -1 && errno != EAGAIN)
             return -1;
@@ -141,13 +156,17 @@ lthread_send(int fd, const void *buffer, size_t length, int flags)
 {
     ssize_t ret = 0;
     ssize_t sent = 0;
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
 
     while (sent != length) {
         if (lt->state & bit(LT_FDEOF))
             return -1;
 
+#if defined(__FreeBSD__) || defined(__APPLE__)
+        ret = send(fd,((char *)buffer) + sent, length - sent, flags);
+#else
         ret = send(fd,((char *)buffer) + sent, length - sent, flags | MSG_NOSIGNAL);
+#endif
 
         if (ret == 0)
             return sent;
@@ -173,7 +192,7 @@ lthread_connect(int fd, struct sockaddr *name, socklen_t namelen, long timeout)
 {
 
     int ret = 0;
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
 
     while (1) {
         ret = connect(fd, name, namelen);
@@ -205,7 +224,7 @@ lthread_writev(int fd, struct iovec *iov, int iovcnt)
 {
     ssize_t total = 0;
     int iov_index = 0;
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
 
     do {
         ssize_t n = writev(fd, iov + iov_index, iovcnt - iov_index);
@@ -239,7 +258,7 @@ lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
 
     off_t sbytes = 0;
     int ret = 0;
-    lthread_t *lt = sched->current_lthread;
+    lthread_t *lt = lthread_get_sched()->current_lthread;
 
     do {
         ret = sendfile(fd, s, offset, nbytes, hdtr, &sbytes, 0);
