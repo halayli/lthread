@@ -26,6 +26,7 @@
 inline void
 register_rd_interest(int fd)
 {
+    sched_t *sched = lthread_get_sched();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_READ,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
     sched->current_lthread->state |= bit(LT_WAIT_READ);
@@ -34,6 +35,7 @@ register_rd_interest(int fd)
 inline void
 register_wr_interest(int fd)
 {
+    sched_t *sched = lthread_get_sched();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_WRITE,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
     sched->current_lthread->state |= bit(LT_WAIT_WRITE);
@@ -46,6 +48,7 @@ clear_interest(int fd)
     struct kevent event;
     struct timespec tm = {0, 0};
     int ret = 0;
+    sched_t *sched = lthread_get_sched();
 
     //printf("sched is %p and fd is %d\n", sched, fd);
     /*EV_SET(&sched->changelist[sched->nevents++],
@@ -65,6 +68,7 @@ create_poller(void)
 inline int
 poll_events(struct timespec t)
 {
+    sched_t *sched = lthread_get_sched();
     return kevent(sched->poller, sched->changelist, sched->nevents,
         sched->eventlist, LT_MAX_EVENTS, &t);
 }

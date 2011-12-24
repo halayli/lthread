@@ -27,6 +27,7 @@ register_rd_interest(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
+    sched_t *sched = lthread_get_sched();
 
     ev.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
@@ -44,6 +45,7 @@ register_wr_interest(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
+    sched_t *sched = lthread_get_sched();
 
     ev.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
@@ -60,6 +62,7 @@ void
 clear_interest(int fd)
 {
     struct epoll_event ev;
+    sched_t *sched = lthread_get_sched();
     ev.data.fd = fd;
     epoll_ctl(sched->poller, EPOLL_CTL_DEL, fd, &ev);
 }
@@ -73,6 +76,8 @@ create_poller(void)
 int
 poll_events(struct timespec t)
 {
+    sched_t *sched = lthread_get_sched();
+
     return epoll_wait(sched->poller, sched->eventlist, LT_MAX_EVENTS,
         t.tv_sec*1000 + t.tv_nsec/1000000);
 }

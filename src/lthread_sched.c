@@ -89,9 +89,12 @@ _rb_insert(struct rb_root *root, sched_node_t *data)
 void
 lthread_join()
 {
+    sched_t *sched;
     lthread_t *lt = NULL, *lttmp = NULL;
     int p = 0;
     int fd = 0;
+
+    sched = lthread_get_sched();
 
     while (sched->sleeping_state ||
         !LIST_EMPTY(&sched->new) ||
@@ -152,7 +155,7 @@ _lthread_wait_for(lthread_t *lt, int fd, lt_event_t e)
     else
         assert(0);
 
-    sched->waiting_state++;
+    lthread_get_sched()->waiting_state++;
     lt->fd_wait = fd;
 
     _lthread_yield(lt);
@@ -181,11 +184,14 @@ clear_rd_wr_state(lthread_t *lt)
 static int
 _lthread_poll(void)
 {
+    sched_t *sched;
     struct timespec t = {0, 0};
     int ret = 0;
     uint64_t usecs = 0;
-    sched->total_new_events = 0;
 
+    sched = lthread_get_sched();
+
+    sched->total_new_events = 0;
     usecs = _min_timeout(sched);
     if (usecs) {
         t.tv_sec =  usecs / 1000000u;

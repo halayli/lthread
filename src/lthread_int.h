@@ -26,12 +26,13 @@
 #include <sys/types.h>
 #include <errno.h>
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
 #include <sys/event.h>
 #else
 #include <sys/epoll.h>
 #endif
 
+#include <pthread.h>
 #include <sys/time.h>
 #include "common/time.h"
 #include "common/rbtree.h"
@@ -139,7 +140,7 @@ struct _sched {
     void                *stack;
     lthread_t           *current_lthread;
     struct _cpu_state   st;
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__APPLE__)
     struct kevent       changelist[MAX_CHANGELIST];
     struct kevent       eventlist[LT_MAX_EVENTS];
 #else
@@ -156,10 +157,15 @@ void    _lthread_free(lthread_t *lt);
 void    _lthread_wait_for(lthread_t *lt, int fd, lt_event_t e);
 int     _sched_lthread(lthread_t *lt,  uint64_t usecs);
 void    _desched_lthread(lthread_t *lt);
-sched_t *lthread_get_sched(void);
 int     sched_create(size_t stack_size);
 void clear_rd_wr_state(lthread_t *lt);
 
-extern __thread sched_t *sched;
+extern pthread_key_t lthread_sched_key;
+
+static inline sched_t *
+lthread_get_sched()
+{
+    return pthread_getspecific(lthread_sched_key);
+}
 
 #endif
