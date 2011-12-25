@@ -38,6 +38,7 @@ static void _exec(void *lt);
 static int  _restore_exec_state(lthread_t *lt);
 static int  _save_exec_state(lthread_t *lt);
 static void _lthread_init(lthread_t *lt);
+static int _lthread_key_create(void);
 
 pthread_key_t lthread_sched_key;
 
@@ -144,22 +145,23 @@ _lthread_key_destructor(void *data)
     free(data);
 }
 
-static void
-_lthread_key_create()
+static int
+_lthread_key_create(void)
 {
     if (lthread_sched_key)
-        return;
+        return 0;
 
     if (pthread_key_create(&lthread_sched_key, _lthread_key_destructor)) {
-        perror("Failed to allocate sched key\n");
-        return;
+        perror("Failed to allocate sched key");
+        return -1;
     }
+
+    return 0;
 }
 
 int
 lthread_init(size_t size)
 {
-    _lthread_key_create();
     return sched_create(size);
 }
 
@@ -228,6 +230,8 @@ sched_create(size_t stack_size)
     size_t sched_stack_size = 0;
 
     sched_stack_size = stack_size ? stack_size : MAX_STACK_SIZE;
+    if (_lthread_key_create() != 0)
+        return errno;
     
     if ((new_sched = calloc(1, sizeof(sched_t))) == NULL) {
         perror("Failed to initialize scheduler\n");
@@ -269,22 +273,27 @@ int
 lthread_create(lthread_t **new_lt, void *fun, void *arg)
 {
     lthread_t *lt = NULL;
+    sched_t *sched = lthread_get_sched();
 
     if ((lt = calloc(1, sizeof(lthread_t))) == NULL) {
-        perror("Failed to allocate memory for new lthread\n");
+        perror("Failed to allocate memory for new lthread");
         return errno;
     }
 
-    _lthread_key_create();
-
-    if (lthread_get_sched() == NULL)
+    if (sched == NULL) {
         sched_create(0);
+        sched = lthread_get_sched();
+        if (sched == NULL) {
+            perror("Failed to create scheduler");
+            return -1;
+        }
+    }
 
-    lt->sched = lthread_get_sched();
+    lt->sched = sched;
     lt->stack = NULL;
     lt->stack_size = 0;
     lt->state = bit(LT_NEW);
-    lt->id = lthread_get_sched()->total_lthreads++;
+    lt->id = sched->total_lthreads++;
     lt->fun = fun;
     lt->fd_wait = -1;
     lt->arg = arg;
