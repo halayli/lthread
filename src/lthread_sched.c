@@ -92,7 +92,6 @@ lthread_join()
     sched_t *sched;
     lthread_t *lt = NULL, *lttmp = NULL;
     int p = 0;
-    int fd = 0;
 
     sched = lthread_get_sched();
 
@@ -117,7 +116,6 @@ lthread_join()
         /* 4. fire up lthreads that are ready to run */
         while (sched->total_new_events) {
             p = --sched->total_new_events;
-            fd = get_fd(&sched->eventlist[p]);
             lt = (lthread_t *)get_data(&sched->eventlist[p]);
             if (lt == NULL)
                 assert(0);
