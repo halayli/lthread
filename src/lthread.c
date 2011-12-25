@@ -148,9 +148,6 @@ _lthread_key_destructor(void *data)
 static int
 _lthread_key_create(void)
 {
-    if (lthread_sched_key)
-        return 0;
-
     if (pthread_key_create(&lthread_sched_key, _lthread_key_destructor)) {
         perror("Failed to allocate sched key");
         return -1;
