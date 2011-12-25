@@ -275,11 +275,6 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
     lthread_t *lt = NULL;
     sched_t *sched = lthread_get_sched();
 
-    if ((lt = calloc(1, sizeof(lthread_t))) == NULL) {
-        perror("Failed to allocate memory for new lthread");
-        return errno;
-    }
-
     if (sched == NULL) {
         sched_create(0);
         sched = lthread_get_sched();
@@ -287,6 +282,11 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
             perror("Failed to create scheduler");
             return -1;
         }
+    }
+
+    if ((lt = calloc(1, sizeof(lthread_t))) == NULL) {
+        perror("Failed to allocate memory for new lthread");
+        return errno;
     }
 
     lt->sched = sched;
