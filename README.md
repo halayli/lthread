@@ -339,14 +339,16 @@ void    *lthread_get_data(void);
 /* 
  * Sets data bound to the lthread. This value can be retrieved anywhere in the lthread using `lthread_get_data()`.
  */
-void    lthread_set_data(void *data);```
+void    lthread_set_data(void *data);
+```
 
 
 ```C
 /*
  * Returns the lthread Id.
  */
-uint64_t lthread_id();```
+uint64_t lthread_id();
+```
 
 
 ```C
