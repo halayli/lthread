@@ -167,9 +167,10 @@ http_serv(lthread_t *lt, void *arg)
      * Run an expensive computation without blocking other lthreads.
      * lthread_compute_begin() will yield http_serv coroutine and resumes
      * it in a compute scheduler that runs in a pthread. If a compute scheduler
-     * is available and free then it will be used otherwise a new compute scheduler
-     * is created and launched in a pthread. After the compute scheduler resumes the lthread
-     * it will wait 60 seconds for a new job and die.
+     * is already available and free it will be used otherwise a compute scheduler
+     * is created and launched in a new pthread. After the compute scheduler
+     * resumes the lthread it will wait 60 seconds for a new job and dies after 60
+     * of inactivity.
      */
     lthread_compute_begin();
         /* make an expensive call without blocking other coroutines */
