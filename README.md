@@ -289,35 +289,35 @@ void    lthread_join(void);
  * blocking calls have been made to resume the lthread in its original lthread scheduler.
  * No lthread_* calls can be made during lthread_compute_begin()/lthread_compute_end(). 
  */
- void   lthread_compute_begin(void);
+ void lthread_compute_begin(void);
 ```
 
 ```C
 /*
  * Moves lthread from pthread back to the lthread scheduler it was running on.
  */
- void   lthread_compute_end(void);
+ void lthread_compute_end(void);
 ```
 
 ```C
 /*
  * Puts an lthread to sleep until msecs have passed.
  */
-void    lthread_sleep(uint64_t msecs);
+void lthread_sleep(uint64_t msecs);
 ```
 
 ```C
 /* 
  * Wake up a sleeping lthread. 
  */
-void    lthread_wakeup(lthread_t *lt);
+void lthread_wakeup(lthread_t *lt);
 ```
 
 ```C
 /* 
  * Creates a condition variable that can be used between lthreads to block/signal each other.
  */
-int     lthread_cond_create(lthread_cond_t **c);
+int lthread_cond_create(lthread_cond_t **c);
 ```
 
 ```C
@@ -325,7 +325,7 @@ int     lthread_cond_create(lthread_cond_t **c);
  * Puts the lthread calling `lthread_cond_wait` to sleep until `timeout` expires or another thread signals it.
  * Returns 0 if it was signaled or -2 if it expired.
  */
-int     lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
+int lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
 ```
 
 
@@ -333,7 +333,7 @@ int     lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
 /*
  * Signals an lthread blocked on `lthread_cond_wait` to wake up and resume.
  */
-void    lthread_cond_signal(lthread_cond_t *c);
+void lthread_cond_signal(lthread_cond_t *c);
 ```
 
 
@@ -341,14 +341,14 @@ void    lthread_cond_signal(lthread_cond_t *c);
 /*
  * Returns the value set for the current lthread.
  */
-void    *lthread_get_data(void);
+void *lthread_get_data(void);
 ```
 
 ```C
 /* 
  * Sets data bound to the lthread. This value can be retrieved anywhere in the lthread using `lthread_get_data()`.
  */
-void    lthread_set_data(void *data);
+void lthread_set_data(void *data);
 ```
 
 
@@ -372,7 +372,7 @@ lthread_t *lthread_current();
  * Sets the lthread method name to the current function.
  * It makes debugging easier by knowing which function a specific lthread was executing.
  */
-void    lthread_set_funcname(const char *f);
+void lthread_set_funcname(const char *f);
 ```
 
 
