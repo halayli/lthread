@@ -131,8 +131,6 @@ _lthread_free(lthread_t *lt)
 int
 _lthread_resume(lthread_t *lt)
 {
-    int ret = 0;
-
     if (lt->state & bit(LT_NEW))
         _lthread_init(lt);
 
@@ -146,13 +144,12 @@ _lthread_resume(lthread_t *lt)
         _lthread_free(lt);
         return -1;
     } else {
+        _save_exec_state(lt);
         /* place it in a compute scheduler if needed.  */
-        ret = _save_exec_state(lt);
         if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
             _lthread_compute_add(lt);
             lthread_get_sched()->sleeping_state++;
         }
-        return ret;
     }
 
     return 0;
@@ -169,7 +166,7 @@ _lthread_key_create(void)
 {
     if (pthread_key_create(&lthread_sched_key, _lthread_key_destructor)) {
         perror("Failed to allocate sched key");
-	abort();
+	    abort();
         return;
     }
     pthread_setspecific(lthread_sched_key, NULL);
@@ -197,7 +194,7 @@ _lthread_init(lthread_t *lt)
     lt->state = bit(LT_READY);
 }
 
-int
+inline int
 _restore_exec_state(lthread_t *lt)
 {
     if (lt->stack_size) {
@@ -222,7 +219,7 @@ _save_exec_state(lthread_t *lt)
         }
         if ((lt->stack = calloc(1, size)) == NULL) {
             perror("Failed to allocate memory to save stack\n");
-            return errno;
+            abort();
         }
     }
 
@@ -236,8 +233,9 @@ _save_exec_state(lthread_t *lt)
 void
 _sched_free(sched_t *sched)
 {
-    free(lthread_get_sched()->stack);
-    free(lthread_get_sched());
+    free(sched->stack);
+    pthread_mutex_destroy(&sched->compute_mutex);
+    free(sched);
     pthread_setspecific(lthread_sched_key, NULL);
 }
 
@@ -270,6 +268,18 @@ sched_create(size_t stack_size)
         return errno;
     }
 
+    if (pthread_mutex_init(&new_sched->compute_mutex, NULL) != 0) {
+        perror("Failed to initialize compute_mutex\n");
+        _sched_free(new_sched);
+        return errno;
+    } 
+
+    if (pipe(new_sched->compute_pipes) == -1) {
+        perror("Failed to initialize pipe\n");
+        _sched_free(new_sched);
+        return errno;
+    }
+
     new_sched->stack_size = sched_stack_size;
 
     new_sched->total_lthreads = 0;
@@ -279,7 +289,6 @@ sched_create(size_t stack_size)
     new_sched->sleeping = RB_ROOT;
     new_sched->birth = rdtsc();
     LIST_INIT(&new_sched->new);
-    pipe(new_sched->compute_pipes);
 
     bzero(&new_sched->st, sizeof(struct _cpu_state));
 
@@ -399,7 +408,8 @@ void
 lthread_cond_signal(lthread_cond_t *c)
 {
     if (c->blocked_lthread != NULL) {
-        LIST_INSERT_HEAD(&lthread_get_sched()->new, c->blocked_lthread, new_next);
+        LIST_INSERT_HEAD(&lthread_get_sched()->new, c->blocked_lthread,
+            new_next);
     }
 
     c->blocked_lthread = NULL;

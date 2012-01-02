@@ -25,6 +25,7 @@
 #include "common/queue.h"
 #include <sys/types.h>
 #include <errno.h>
+#include <pthread.h>
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
 #include <sys/event.h>
@@ -121,6 +122,7 @@ struct _lthread {
     LIST_ENTRY(_lthread)    new_next;
     LIST_ENTRY(_lthread)    sleep_next;
     LIST_ENTRY(_lthread)    compute_next;
+    LIST_ENTRY(_lthread)    compute_sched_next;
     sched_node_t        *sched_node;
     lthread_l_t         *sleep_list;
     void                *stack;
@@ -142,6 +144,7 @@ struct _sched {
     int                 total_new_events;
     /* lists to save an lthread depending on its state */
     lthread_l_t         new;
+    lthread_l_t         compute;
     struct rb_root      sleeping;
     uint64_t            birth;
     void                *stack;
@@ -154,6 +157,7 @@ struct _sched {
     struct epoll_event  eventlist[LT_MAX_EVENTS];
 #endif
     int                 compute_pipes[2];
+    pthread_mutex_t     compute_mutex;
 };
 
 typedef enum {
@@ -183,7 +187,7 @@ void    _lthread_wait_for(lthread_t *lt, int fd, lt_event_t e);
 int     _sched_lthread(lthread_t *lt,  uint64_t usecs);
 void    _desched_lthread(lthread_t *lt);
 void    clear_rd_wr_state(lthread_t *lt);
-int     _restore_exec_state(lthread_t *lt);
+inline int _restore_exec_state(lthread_t *lt);
 int     _switch(struct _cpu_state *new_state, struct _cpu_state *cur_state);
 int     sched_create(size_t stack_size);
 int     _save_exec_state(lthread_t *lt);

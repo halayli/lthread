@@ -15,7 +15,8 @@ enum {THREAD_TIMEOUT_BEFORE_EXIT = 60};
 pthread_key_t compute_sched_key;
 pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
-LIST_HEAD(compute_sched_l, _compute_sched) compute_scheds = LIST_HEAD_INITIALIZER(compute_scheds);
+LIST_HEAD(compute_sched_l, _compute_sched) compute_scheds = \
+    LIST_HEAD_INITIALIZER(compute_scheds);
 pthread_mutex_t sched_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void* _lthread_compute_run(void *arg);
@@ -41,17 +42,23 @@ lthread_compute_begin(void)
         }
     }
 
-    /* create one if there is no scheduler available */
+    /* create schedule if there is no scheduler available */
     if (compute_sched == NULL) {
         if ((compute_sched = _lthread_compute_sched_create()) == NULL) {
-            pthread_mutex_unlock(&sched_mutex);
-            return -1;
+            /* we failed to create a scheduler. Use the first scheduler
+             * in the list, otherwise return failure.
+             */
+            compute_sched = LIST_FIRST(&compute_scheds);
+            if (compute_sched == NULL) {
+                pthread_mutex_unlock(&sched_mutex);
+                return -1;
+            }
+        } else {
+            LIST_INSERT_HEAD(&compute_scheds, compute_sched, compute_next);
         }
-        lt->compute_sched = compute_sched;
-        LIST_INSERT_HEAD(&compute_scheds, compute_sched, compute_next);
-    } else {
-        lt->compute_sched = compute_sched;
     }
+
+    lt->compute_sched = compute_sched;
 
     lt->state |= bit(LT_PENDING_RUNCOMPUTE);
     pthread_mutex_lock(&lt->compute_sched->lthreads_mutex);
@@ -115,7 +122,8 @@ _lthread_compute_add(lthread_t *lt)
     /* change ebp esp to be relative to the new stack address */
     lt->st.ebp = lt->compute_sched->st.ebp = (void*)((intptr_t)stack - \
          ((intptr_t)org_stack - (intptr_t)(lt->st.ebp)));
-    lt->st.esp = lt->compute_sched->st.esp = (void*)((intptr_t)stack - lt->stack_size);
+    lt->st.esp = lt->compute_sched->st.esp = (void*)((intptr_t)stack - \
+        lt->stack_size);
 
     pthread_mutex_lock(&lt->compute_sched->lthreads_mutex);
     lt->state &= clearbit(LT_PENDING_RUNCOMPUTE);
@@ -146,12 +154,20 @@ _lthread_compute_sched_create(void)
     if ((compute_sched = calloc(1, sizeof(compute_sched_t))) == NULL)
         return NULL;
 
-    pthread_mutex_init(&compute_sched->run_mutex, NULL); 
-    pthread_mutex_init(&compute_sched->lthreads_mutex, NULL); 
-    pthread_cond_init(&compute_sched->run_mutex_cond, NULL);
+    if (pthread_mutex_init(&compute_sched->run_mutex, NULL) != 0 ||
+        pthread_mutex_init(&compute_sched->lthreads_mutex, NULL) != 0 ||
+        pthread_cond_init(&compute_sched->run_mutex_cond, NULL) != 0) {
+        free(compute_sched);
+        return NULL;
+    }
+
+    if (pthread_create(&pthread,
+        NULL, _lthread_compute_run, compute_sched) != 0) {
+        _lthread_compute_sched_free(compute_sched);
+        return NULL;
+    }
 
     LIST_INIT(&compute_sched->lthreads);
-    pthread_create(&pthread, NULL, _lthread_compute_run, compute_sched);
 
     return compute_sched;
 }
@@ -174,6 +190,7 @@ _lthread_compute_save_exec_state(lthread_t *lt)
         }
         if ((lt->stack = calloc(1, size)) == NULL) {
             perror("Failed to allocate memory to save stack\n");
+            abort();
             return errno;
         }
     }
@@ -186,7 +203,8 @@ _lthread_compute_save_exec_state(lthread_t *lt)
     org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
 
     /* change ebp & esp back to be relative to the old stack address */
-    lt->st.ebp = (void*)((intptr_t)org_stack - ((intptr_t)stack - (intptr_t)(lt->st.ebp)));
+    lt->st.ebp = (void*)((intptr_t)org_stack - ((intptr_t)stack - \
+        (intptr_t)(lt->st.ebp)));
     lt->st.esp = (void*)((intptr_t)org_stack - lt->stack_size);
 
     return 0;
@@ -227,7 +245,7 @@ _lthread_compute_run(void *arg)
         while (1) {
             pthread_mutex_lock(&compute_sched->lthreads_mutex);
 
-            /* we have no work to do, break and wait 60 secs then exit if possible */
+            /* we have no work to do, break and wait 60 secs then exit */
             if (LIST_EMPTY(&compute_sched->lthreads)) {
                 pthread_mutex_unlock(&compute_sched->lthreads_mutex);
                 break;
@@ -252,14 +270,20 @@ _lthread_compute_run(void *arg)
             compute_sched->state = COMPUTE_FREE;
 
             /* resume it back on the  prev scheduler */
-            uintptr_t buf[1] = {(uintptr_t)lt};
-            write(lt->sched->compute_pipes[1], buf, sizeof(buf));
+            pthread_mutex_lock(&lt->sched->compute_mutex);
+            LIST_INSERT_HEAD(&lt->sched->compute, lt, compute_sched_next);
+            pthread_mutex_unlock(&lt->sched->compute_mutex);
+
+            /* signal the prev scheduler in case it was sleeping in a poll */
+            write(lt->sched->compute_pipes[1], "1", 1);
         }
 
         pthread_mutex_lock(&compute_sched->run_mutex);
-        timeout.tv_sec = time(NULL) + THREAD_TIMEOUT_BEFORE_EXIT; /* wait if we have no work to do, exit */
+        /* wait if we have no work to do, exit */
+        timeout.tv_sec = time(NULL) + THREAD_TIMEOUT_BEFORE_EXIT; 
         timeout.tv_nsec = 0;
-        status = pthread_cond_timedwait(&compute_sched->run_mutex_cond, &compute_sched->run_mutex, &timeout);
+        status = pthread_cond_timedwait(&compute_sched->run_mutex_cond,
+            &compute_sched->run_mutex, &timeout);
         pthread_mutex_unlock(&compute_sched->run_mutex);
 
         /* if we didn't timeout, then we got signaled to do some work */
