@@ -140,6 +140,7 @@ _lthread_resume(lthread_t *lt)
 
     lthread_get_sched()->current_lthread = lt;
     _switch(&lt->st, &lt->sched->st);
+    lthread_get_sched()->current_lthread = NULL;
 
     if (lt->state & bit(LT_EXITED)) {
         _lthread_free(lt);

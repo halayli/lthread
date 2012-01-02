@@ -21,6 +21,7 @@
 
 #include "lthread_int.h"
 #include <assert.h>
+#include <string.h>
 
 void
 register_rd_interest(int fd)
@@ -28,16 +29,19 @@ register_rd_interest(int fd)
     struct epoll_event ev;
     int ret = 0;
     sched_t *sched = lthread_get_sched();
+    lthread_t *lt = sched->current_lthread;
 
     ev.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
-    ev.data.ptr = sched->current_lthread;
+    if (lt != NULL)
+        ev.data.ptr = lt;
     ret = epoll_ctl(sched->poller, EPOLL_CTL_MOD, fd, &ev);
     if (ret < 0)
         ret = epoll_ctl(sched->poller, EPOLL_CTL_ADD, fd, &ev);
     assert(ret != -1);
 
-    sched->current_lthread->state |= bit(LT_WAIT_READ);
+    if (lt != NULL)
+        lt->state |= bit(LT_WAIT_READ);
 }
 
 void

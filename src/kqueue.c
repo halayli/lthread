@@ -29,7 +29,8 @@ register_rd_interest(int fd)
     sched_t *sched = lthread_get_sched();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_READ,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
-    sched->current_lthread->state |= bit(LT_WAIT_READ);
+    if (sched->current_lthread)
+        sched->current_lthread->state |= bit(LT_WAIT_READ);
 }
 
 inline void
