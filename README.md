@@ -264,21 +264,21 @@ Library calls
  * Creates a new lthread and returns it via `*new_lt`.
  * Returns 0 if success, -1 on failure.
  */
-int     lthread_create(lthread_t **new_lt, void *fun, void *arg);
+int lthread_create(lthread_t **new_lt, void *fun, void *arg);
 ```
 
 ```C
 /*
  * Destroys an lthread and cancels any events it was expecting.
  */
-void    lthread_destroy(lthread_t *lt);
+void lthread_destroy(lthread_t *lt);
 ```
 
 ```C
 /*
  * Blocks until all lthreads created have exited.
  */
-void    lthread_join(void);
+void lthread_join(void);
 ```
 
 ```C
