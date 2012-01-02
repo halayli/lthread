@@ -44,7 +44,6 @@ lthread_compute_begin(void)
     /* create one if there is no scheduler available */
     if (compute_sched == NULL) {
         if ((compute_sched = _lthread_compute_sched_create()) == NULL) {
-	    abort();
             pthread_mutex_unlock(&sched_mutex);
             return -1;
         }
