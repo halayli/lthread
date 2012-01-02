@@ -101,7 +101,7 @@ get_event(struct epoll_event *ev)
     return ev->events;
 }
 
-inlint void *
+inline void *
 get_data(struct epoll_event *ev)
 {
     return ev->data.ptr;
