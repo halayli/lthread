@@ -134,7 +134,8 @@ lthread_join()
         while (sched->total_new_events) {
             p = --sched->total_new_events;
 
-            /* We got signaled via pipe to wakeup from polling & rusume compute.             * Those lthreads will get handled in step 3.
+            /* We got signaled via pipe to wakeup from polling & rusume compute.
+             * Those lthreads will get handled in step 3.
              */ 
             fd = get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
