@@ -163,10 +163,18 @@ http_serv(lthread_t *lt, void *arg)
         return;
     }
 
+    /*
+     * Run an expensive computation without blocking other lthreads.
+     * lthread_compute_begin() will yield http_serv coroutine and resumes
+     * it in a compute scheduler that runs in a pthread. If a compute scheduler
+     * is available and free then it will be used otherwise a new compute scheduler
+     * is created and launched in a pthread. After the compute scheduler resumes the lthread
+     * it will wait 60 seconds for a new job and die.
+     */
     lthread_compute_begin();
+        /* make an expensive call without blocking other coroutines */
         ret = fibonacci(35);
     lthread_compute_end();
-
 
     /* reply back to user */
     lthread_send(cli_info->fd, reply, strlen(reply), 0);
@@ -277,7 +285,7 @@ void    lthread_join(void);
  * Moves lthread into a pthread to run its expensive computation or make a blocking 
  * call like `gethostbyname()`.
  * This call *must* be followed by lthread_compute_end() after the computation and/or
- * blocking calls have been made to resume the lthread in its original s lthread scheduler.
+ * blocking calls have been made to resume the lthread in its original lthread scheduler.
  * No lthread_* calls can be made during lthread_compute_begin()/lthread_compute_end(). 
  */
  void   lthread_compute_begin(void);
