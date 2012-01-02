@@ -109,8 +109,6 @@ _lthread_compute_add(lthread_t *lt)
     void **stack = NULL;
     void **org_stack = NULL;
 
-    _save_exec_state(lt);
-
     stack = (void **)(lt->compute_sched->stack + MAX_STACK_SIZE);
     org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
 

@@ -23,7 +23,7 @@
 #include <assert.h>
 #include <string.h>
 
-void
+inline void
 register_rd_interest(int fd)
 {
     struct epoll_event ev;
@@ -44,25 +44,28 @@ register_rd_interest(int fd)
         lt->state |= bit(LT_WAIT_READ);
 }
 
-void
+inline void
 register_wr_interest(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
     sched_t *sched = lthread_get_sched();
+    lthread_t *lt = sched->current_lthread;
 
     ev.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
-    ev.data.ptr = sched->current_lthread;
+    if (lt != NULL)
+        ev.data.ptr = lt;
     ret = epoll_ctl(sched->poller, EPOLL_CTL_MOD, fd, &ev);
     if (ret < 0)
         ret = epoll_ctl(sched->poller, EPOLL_CTL_ADD, fd, &ev);
     assert(ret != -1);
 
-    sched->current_lthread->state |= bit(LT_WAIT_WRITE);
+    if (lt != NULL)
+        lt->state |= bit(LT_WAIT_WRITE);
 }
 
-void
+inline void
 clear_interest(int fd)
 {
     struct epoll_event ev;
@@ -77,7 +80,7 @@ create_poller(void)
     return epoll_create(1024);
 }
 
-int
+inline int
 poll_events(struct timespec t)
 {
     sched_t *sched = lthread_get_sched();
@@ -86,19 +89,19 @@ poll_events(struct timespec t)
         t.tv_sec*1000 + t.tv_nsec/1000000);
 }
 
-int
+inline int
 get_fd(struct epoll_event *ev)
 {
     return ev->data.fd;
 }
 
-int
+inline int
 get_event(struct epoll_event *ev)
 {
     return ev->events;
 }
 
-void *
+inlint void *
 get_data(struct epoll_event *ev)
 {
     return ev->data.ptr;
