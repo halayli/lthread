@@ -1,20 +1,17 @@
 lthread
-======
+=======
 
 Introduction
 ------------
 
-lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads.
+lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads. lthread allows you to make blocking calls and expensive computations inside a coroutine as long as you surround your code with lthread_compute_begin()/lthread_compute_end(), hence combining the advantages of coroutines and pthreads. See the http server example below. 
 
-lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on locks as this will block the whole scheduler in the pthread.
+lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on condition variables as this will block the whole scheduler in the pthread.
 
 ![](https://github.com/halayli/lthread/blob/master/images/lthread_scheduler.png?raw=true "Lthread scheduler")
 
 To run an lthread scheduler in each pthread, launch the pthread and create the lthreads using lthread_create() followed by lthread_join() in each pthread.
 
-Running several schedulers, each in a pthread, allows an lthread to do more significant work with a small penalty and that is, slowing down other lthreads running in the same scheduler. The lthreads running in other schedulers will not be impacted and will be able to continue running depending on the number of cores/cpus available.
-
-Note that lthread doesn't create pthreads behind the scene, it's the responsibility of the user to create/launch pthreads. lthread only creates its schedulers inside the pthread.
 
 ### lthread scheduler's inner works
 
@@ -22,10 +19,12 @@ The lthread scheduler has a main stack that it uses to execute/resume lthreads o
 
 The scheduler is build around epoll/kqueue and uses an rbtree to track which lthreads needs to run next.
 
+If you need to execute an expensive computation or make a blocking call inside an lthread, you can surround the block of code with `lthread_compute_begin()` and `lthread_compute_end()`, which moves the lthread into an lthread_compute_scheduler that runs in a pthread to avoid blocking other lthreads. lthread_compute_schedulers are created when needed and they die after 60 seconds of inactivity. `lthread_compute_begin()` tries to pick an already created and free lthread_compute_scheduler before it creates a new one.
+
 Installation
 ------------
 
-Currently, lthread is only supported on FreeBSD and Linux. OS X support will becoming soon.
+Currently, lthread is supported on FreeBSD, OS X,  and Linux.
 
 `cd src`
 
@@ -101,7 +100,12 @@ main(int argc, char **argv)
 
 ```
 
-### An incomplete web server to illustrate some of lthread features 
+### An incomplete web server that returns fibonacci(35) to illustrate some of lthread features.
+
+In this example, the dummy http server will accept a connection, runs a relatively expensive fibonacci(35) in lthread_compute_begin() / lthred_compute_end() and replies back.
+
+While fibonacci is running, we'll continue to accept new connections and handle them without blocking because fibonacci is running between lthread_compute_begin() and lthread_compute_end(), which moves the lthread into a pthread and resumes it there until lthread_compute_end() is called and that's when it moves back to its previous scheduler.
+
 
 `gcc -I/usr/local/include -llthread test.c -o test`
 
@@ -122,6 +126,17 @@ struct cli_info {
 typedef struct cli_info cli_info_t;
 
 char *reply = "HTTP/1.0 200 OK\r\nContent-length: 11\r\n\r\nHello World";
+
+unsigned int
+fibonacci(unsigned int n)
+{
+    if (n == 0)
+        return 0;
+     if (n == 1)
+        return 1;
+
+     return fibonacci(n - 1) + fibonacci(n - 2);
+}
 
 void
 http_serv(lthread_t *lt, void *arg)
@@ -147,6 +162,11 @@ http_serv(lthread_t *lt, void *arg)
         free(arg);
         return;
     }
+
+    lthread_compute_begin();
+        ret = fibonacci(35);
+    lthread_compute_end();
+
 
     /* reply back to user */
     lthread_send(cli_info->fd, reply, strlen(reply), 0);
@@ -230,109 +250,193 @@ main(int argc, char **argv)
 Library calls
 -------------
 
-```int     lthread_create(lthread_t **new_lt, void *fun, void *arg);```
+```C
+/*
+ * Creates a new lthread and returns it via `*new_lt`.
+ * Returns 0 if success, -1 on failure.
+ */
+int     lthread_create(lthread_t **new_lt, void *fun, void *arg);
+```
 
-Creates a new lthread and returns it via `*new_lt`.
+```C
+/*
+ * Destroys an lthread and cancels any events it was expecting.
+ */
+void    lthread_destroy(lthread_t *lt);
+```
 
-Returns 0 if success, -1 on failure.
+```C
+/*
+ * Blocks until all lthreads created have exited.
+ */
+void    lthread_join(void);
+```
 
-```void    lthread_destroy(lthread_t *lt);```
+```C
+/*
+ * Moves lthread into a pthread to run its expensive computation or make a blocking 
+ * call like `gethostbyname()`.
+ * This call *must* be followed by lthread_compute_end() after the computation and/or
+ * blocking calls have been made to resume the lthread in its original s lthread scheduler.
+ * No lthread_* calls can be made during lthread_compute_begin()/lthread_compute_end(). 
+ */
+ void   lthread_compute_begin(void);
+```
 
-Destroys an lthread and cancels any events it was expecting.
+```C
+/*
+ * Moves lthread from pthread back to the lthread scheduler it was running on.
+ */
+ void   lthread_compute_end(void);
+```
 
-```void    lthread_join(void);```
+```C
+/*
+ * Puts an lthread to sleep until msecs have passed.
+ */
+void    lthread_sleep(uint64_t msecs);
+```
 
-Blocks until all lthreads created have exited.
+```C
+/* 
+ * Wake up a sleeping lthread. 
+ */
+void    lthread_wakeup(lthread_t *lt);
+```
 
-```void    lthread_sleep(uint64_t msecs);```
+```C
+/* 
+ * Creates a condition variable that can be used between lthreads to block/signal each other.
+ */
+int     lthread_cond_create(lthread_cond_t **c);
+```
 
-Puts an lthread to sleep until msecs have passed.
+```C
+/*
+ * Puts the lthread calling `lthread_cond_wait` to sleep until `timeout` expires or another thread signals it.
+ * Returns 0 if it was signaled or -2 if it expired.
+ */
+int     lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
+```
 
-```void    lthread_wakeup(lthread_t *lt);```
 
-Wake up a sleeping lthread.
+```C
+/*
+ * Signals an lthread blocked on `lthread_cond_wait` to wake up and resume.
+ */
+void    lthread_cond_signal(lthread_cond_t *c);
+```
 
-```int     lthread_cond_create(lthread_cond_t **c);```
 
-Creates a condition variable that can be used between lthreads to block/signal each other.
+```C
+/*
+ * Returns the value set for the current lthread.
+ */
+void    *lthread_get_data(void);
+```
 
-```int     lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);```
+```C
+/* 
+ * Sets data bound to the lthread. This value can be retrieved anywhere in the lthread using `lthread_get_data()`.
+ */
+void    lthread_set_data(void *data);```
 
-Puts the lthread calling `lthread_cond_wait` to sleep until `timeout` expires or another thread signals it.
 
-Returns 0 if it was signaled or -2 if it expired.
+```C
+/*
+ * Returns the lthread Id.
+ */
+uint64_t lthread_id();```
 
-```void    lthread_cond_signal(lthread_cond_t *c);```
 
-Signals an lthread blocked on `lthread_cond_wait` to wake up and resume.
+```C
+/*
+ * Returns a pointer to the current lthread.
+ */
+lthread_t *lthread_current();
+```
 
-```void    *lthread_get_data(void);```
-
-Returns the value set for the current lthread.
-
-```void    lthread_set_data(void *data);```
-
-Sets data bound to the lthread. This value can be retrieved anywhere in the lthread using `lthread_get_data`.
-
-```uint64_t lthread_id();```
-
-Returns the lthread Id. 
-
-```lthread_t *lthread_current();```
-
-Returns a pointer to the current lthread.
-
-```void    lthread_set_funcname(const char *f);```
-
-Sets the lthread method name to the current function. It makes debugging easier by knowing which function a specific lthread was executing.
+```C
+/*
+ * Sets the lthread method name to the current function.
+ * It makes debugging easier by knowing which function a specific lthread was executing.
+ */
+void    lthread_set_funcname(const char *f);
+```
 
 
 ###Socket related functions
 
 Refer to the appropriate man pages of each function to learn about their arguments.
 
-```int lthread_socket(int domain, int type, int protocol);```
+```C
+/*
+ * An lthread version of socket(2).
+ * Returns a socket fd.
+ */
+int lthread_socket(int domain, int type, int protocol);
+```
 
-An lthread version of socket(2).
 
-```int lthread_accept(int fd, struct sockaddr *, socklen_t *);```
+```C
+/*
+ * An lthread version of accept(2).
+ */
+int lthread_accept(int fd, struct sockaddr *, socklen_t *);
+```
 
-An lthread version of accept(2).
 
-```int lthread_close(int fd);```
+```C
+/*
+ * Close an lthread_socket.
+ */
+int lthread_close(int fd);
+```
 
-Close an lthread_socket.
 
-```int lthread_connect(int fd, struct sockaddr *, socklen_t, uint32_t timeout);```
+```C
+/*
+ * An lthread version of connect(2) with an additional argument `timeout` to specify how 
+ * long the function waits before it gives up on connecting.
+ * Returns 0 on a successful connection or -2 if it expired waiting.
+ */
+int lthread_connect(int fd, struct sockaddr *, socklen_t, uint32_t timeout);
+```
 
-An lthread version of connect(2) with an additional argument `timeout` to specify how long the function waits before it gives up on connecting.
 
-Returns 0 on a successful connection or -2 if it expired waiting.
+```C
+/*
+ * An lthread version of recv(2) with an additional argument `timeout` to 
+ * specify how long to wait before it gives up on receiving.
+ * Returns the number of bytes received or -2 if it expired waiting.
+ */
+ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, unsigned int timeout);
+```
 
-```ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, unsigned int timeout);```
+```C
+/*
+ * An lthread version of send(2).
+ */
+ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
+```
 
-An lthread version of recv(2) with an additional argument `timeout` to specify how long to wait before it gives up on receiving.
-
-Returns the number of bytes received or -2 if it expired waiting.
-
-```ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);```
-
-An lthread version of send(2).
-
-```ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);```
-
-An lthread version of writev(2).
+```C
+/*
+ * An lthread version of writev(2).
+ */
+ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);
+```
 
 *freebsd only*
 
-```int lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr);```
-
-An lthread version of FreeBSD sendfile(2).
-
+```C
+/*
+ * An lthread version of FreeBSD sendfile(2).
+ */
+int lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr);
+```
 
 TODOS
 -----
 
 - aio support
-
-- Write lthread_compute, to offload cpu intensive work asynchronously.
