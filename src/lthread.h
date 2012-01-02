@@ -65,4 +65,7 @@ ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);
 int     lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr);
 #endif
 
+int lthread_compute_begin(void);
+void lthread_compute_end(void);
+
 #endif

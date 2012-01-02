@@ -92,6 +92,7 @@ lthread_join()
     sched_t *sched;
     lthread_t *lt = NULL, *lttmp = NULL;
     int p = 0;
+    int fd = 0;
 
     sched = lthread_get_sched();
 
@@ -111,11 +112,23 @@ lthread_join()
         }
 
         /* 3. check if we received any events after lthread_poll */
+        register_rd_interest(sched->compute_pipes[0]);
         _lthread_poll();
 
         /* 4. fire up lthreads that are ready to run */
         while (sched->total_new_events) {
             p = --sched->total_new_events;
+
+            /* 5. resume lthread_compute thread we received on pipe */
+            fd = get_fd(&sched->eventlist[p]);
+            if (fd == sched->compute_pipes[0]) {
+                lt = NULL;
+                read(fd, &lt, sizeof(uintptr_t));
+                sched->sleeping_state--;
+                _lthread_resume(lt);
+                continue;
+            }
+
             lt = (lthread_t *)get_data(&sched->eventlist[p]);
             if (lt == NULL)
                 assert(0);

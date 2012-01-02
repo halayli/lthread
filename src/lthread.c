@@ -26,6 +26,7 @@
 #include <limits.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <unistd.h>
 
 #include "common/time.h"
 #include "common/rbtree.h"
@@ -35,8 +36,6 @@
 extern int errno;
 
 static void _exec(void *lt);
-static int  _restore_exec_state(lthread_t *lt);
-static int  _save_exec_state(lthread_t *lt);
 static void _lthread_init(lthread_t *lt);
 static int _lthread_key_create(void);
 
@@ -123,6 +122,8 @@ _lthread_free(lthread_t *lt)
 int
 _lthread_resume(lthread_t *lt)
 {
+    int ret = 0;
+
     if (lt->state & bit(LT_NEW))
         _lthread_init(lt);
 
@@ -135,8 +136,16 @@ _lthread_resume(lthread_t *lt)
         _lthread_free(lt);
         return -1;
     } else {
-        return _save_exec_state(lt);
+        /* place it in a compute scheduler if needed.  */
+        ret = _save_exec_state(lt);
+        if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
+            _lthread_compute_add(lt);
+            lthread_get_sched()->sleeping_state++;
+        }
+        return ret;
     }
+
+    return 0;
 }
 
 static void
@@ -176,7 +185,7 @@ _lthread_init(lthread_t *lt)
     lt->state = bit(LT_READY);
 }
 
-static int
+int
 _restore_exec_state(lthread_t *lt)
 {
     if (lt->stack_size) {
@@ -186,7 +195,7 @@ _restore_exec_state(lthread_t *lt)
     return 0;
 }
 
-static int
+int
 _save_exec_state(lthread_t *lt)
 {
     void *stack_top = NULL;
@@ -260,6 +269,7 @@ sched_create(size_t stack_size)
     new_sched->sleeping = RB_ROOT;
     new_sched->birth = rdtsc();
     LIST_INIT(&new_sched->new);
+    pipe(new_sched->compute_pipes);
 
     bzero(&new_sched->st, sizeof(struct _cpu_state));
 
@@ -287,6 +297,7 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
     }
 
     lt->sched = sched;
+    lt->compute_sched = NULL;
     lt->stack = NULL;
     lt->stack_size = 0;
     lt->state = bit(LT_NEW);

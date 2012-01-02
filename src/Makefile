@@ -1,4 +1,4 @@
-src = lthread.c lthread_socket.c lthread_sched.c \
+src = lthread.c lthread_socket.c lthread_sched.c lthread_compute.c \
     ../common/rbtree.c ../common/time.c poller.c
 gccflags = "-g"
 
@@ -14,6 +14,9 @@ install: lthread.o
 
 test: lthread.o
 	gcc -g rbtree.o time.o poller.o lthread_sched.o lthread.o lthread_unit_test.c -o test_lthread
+
+compute_test: lthread.o
+	gcc -lpthread -g rbtree.o time.o poller.o lthread_sched.o lthread.o lthread_compute.o lthread_unit_test_compute.c -o test_lthread
 
 uninstall: 
 	rm /usr/lib/liblthread.so
