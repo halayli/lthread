@@ -73,9 +73,15 @@ lthread_compute_begin(void)
      * We need to change ebp to make it relative to the new stack address.
      * and we'll restore it back on lthread_compute_end.
      */
+#ifdef __i386__
     asm("movl 0(%%ebp),%0" : "=r" (lt->ebp) :);
     asm("movl %0, 0(%%ebp)\n" ::"a"((void *)((intptr_t)stack - \
         ((intptr_t)org_stack - (intptr_t)lt->ebp))));
+#elif defined(__x86_64__)
+    asm("movq 0(%%rbp),%0" : "=r" (lt->ebp) :);
+    asm("movq %0, 0(%%rbp)\n" ::"a"((void *)((intptr_t)stack - \
+        ((intptr_t)org_stack - (intptr_t)lt->ebp))));
+#endif
 
     return 0;
 }
@@ -89,7 +95,11 @@ lthread_compute_end(void)
     lt->state &= clearbit(LT_RUNCOMPUTE);
     _switch(&compute_sched->st, &lt->st);
     /* restore ebp back to its relative old stack address */
+#ifdef __i386__
     asm("movl %0, 0(%%ebp)\n" ::"a"(lt->ebp));
+#elif defined(__x86_64__)
+    asm("movq %0, 0(%%rbp)\n" ::"a"(lt->ebp));
+#endif
 }
 
 void

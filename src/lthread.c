@@ -27,6 +27,7 @@
 #include <assert.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include "common/time.h"
 #include "common/rbtree.h"
@@ -37,9 +38,12 @@ extern int errno;
 
 static void _exec(void *lt);
 static void _lthread_init(lthread_t *lt);
-static int _lthread_key_create(void);
+static void _lthread_key_create(void);
 
 pthread_key_t lthread_sched_key;
+static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+
+
 
 int _switch(struct _cpu_state *new_state, struct _cpu_state *cur_state);
 #ifdef __i386__
@@ -73,6 +77,7 @@ __asm__ (
 "    .text                                  \n"
 "       .p2align 4,,15                                   \n"
 ".globl _switch                                          \n"
+".globl __switch                                         \n"
 "_switch:                                                \n"
 "__switch:                                               \n"
 "       movq %rsp, 0(%rsi)      # save stack_pointer     \n"
@@ -100,6 +105,10 @@ __asm__ (
 static void
 _exec(void *lt)
 {
+
+#ifdef __llvm__ && defined (__x86_64__)
+  __asm__ ("movq 16(%%rbp), %[lt]" : [lt] "=r" (lt));
+#endif
     ((lthread_t *)lt)->fun(lt, ((lthread_t *)lt)->arg);
     ((lthread_t *)lt)->state = bit(LT_EXITED);
 
@@ -154,15 +163,17 @@ _lthread_key_destructor(void *data)
     free(data);
 }
 
-static int
+static void
 _lthread_key_create(void)
 {
     if (pthread_key_create(&lthread_sched_key, _lthread_key_destructor)) {
         perror("Failed to allocate sched key");
-        return -1;
+	abort();
+        return;
     }
+    pthread_setspecific(lthread_sched_key, NULL);
 
-    return 0;
+    return;
 }
 
 int
@@ -175,7 +186,7 @@ static void
 _lthread_init(lthread_t *lt)
 {
     void **stack = NULL;
-    stack = (void **)(lt->sched->stack + lt->sched->stack_size);
+    stack = (void **)(lt->sched->stack + (lt->sched->stack_size));
 
     stack[-3] = NULL;
     stack[-2] = (void *)lt;
@@ -236,8 +247,6 @@ sched_create(size_t stack_size)
     size_t sched_stack_size = 0;
 
     sched_stack_size = stack_size ? stack_size : MAX_STACK_SIZE;
-    if (_lthread_key_create() != 0)
-        return errno;
     
     if ((new_sched = calloc(1, sizeof(sched_t))) == NULL) {
         perror("Failed to initialize scheduler\n");
@@ -280,6 +289,7 @@ int
 lthread_create(lthread_t **new_lt, void *fun, void *arg)
 {
     lthread_t *lt = NULL;
+    pthread_once(&key_once, _lthread_key_create);
     sched_t *sched = lthread_get_sched();
 
     if (sched == NULL) {
