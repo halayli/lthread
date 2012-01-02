@@ -100,7 +100,7 @@ main(int argc, char **argv)
 
 ```
 
-### An incomplete web server that returns fibonacci(35) to illustrate some of lthread features.
+### An incomplete web server to illustrate some of lthread features
 
 In this example, the dummy http server will accept a connection, runs a relatively expensive fibonacci(35) in lthread_compute_begin() / lthred_compute_end() and replies back.
 
