@@ -37,6 +37,196 @@ Usage
 
 Pass `-llthread` to gcc to use lthread in your program.
 
+Library calls
+-------------
+
+```C
+/*
+ * Creates a new lthread and returns it via `*new_lt`.
+ * Returns 0 if success, -1 on failure.
+ */
+int lthread_create(lthread_t **new_lt, void *fun, void *arg);
+```
+
+```C
+/*
+ * Destroys an lthread and cancels any events it was expecting.
+ */
+void lthread_destroy(lthread_t *lt);
+```
+
+```C
+/*
+ * Blocks until all lthreads created have exited.
+ */
+void lthread_join(void);
+```
+
+```C
+/*
+ * Moves lthread into a pthread to run its expensive computation or make a blocking 
+ * call like `gethostbyname()`.
+ * This call *must* be followed by lthread_compute_end() after the computation and/or
+ * blocking calls have been made to resume the lthread in its original lthread scheduler.
+ * No lthread_* calls can be made during lthread_compute_begin()/lthread_compute_end(). 
+ */
+ void lthread_compute_begin(void);
+```
+
+```C
+/*
+ * Moves lthread from pthread back to the lthread scheduler it was running on.
+ */
+ void lthread_compute_end(void);
+```
+
+```C
+/*
+ * Puts an lthread to sleep until msecs have passed.
+ */
+void lthread_sleep(uint64_t msecs);
+```
+
+```C
+/* 
+ * Wake up a sleeping lthread. 
+ */
+void lthread_wakeup(lthread_t *lt);
+```
+
+```C
+/* 
+ * Creates a condition variable that can be used between lthreads to block/signal each other.
+ */
+int lthread_cond_create(lthread_cond_t **c);
+```
+
+```C
+/*
+ * Puts the lthread calling `lthread_cond_wait` to sleep until `timeout` expires or another thread signals it.
+ * Returns 0 if it was signaled or -2 if it expired.
+ */
+int lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
+```
+
+
+```C
+/*
+ * Signals an lthread blocked on `lthread_cond_wait` to wake up and resume.
+ */
+void lthread_cond_signal(lthread_cond_t *c);
+```
+
+
+```C
+/*
+ * Returns the value set for the current lthread.
+ */
+void *lthread_get_data(void);
+```
+
+```C
+/* 
+ * Sets data bound to the lthread. This value can be retrieved anywhere in the lthread using `lthread_get_data()`.
+ */
+void lthread_set_data(void *data);
+```
+
+
+```C
+/*
+ * Returns the lthread Id.
+ */
+uint64_t lthread_id();
+```
+
+
+```C
+/*
+ * Returns a pointer to the current lthread.
+ */
+lthread_t *lthread_current();
+```
+
+```C
+/*
+ * Sets the lthread method name to the current function.
+ * It makes debugging easier by knowing which function a specific lthread was executing.
+ */
+void lthread_set_funcname(const char *f);
+```
+
+###Socket related functions
+
+Refer to the appropriate man pages of each function to learn about their arguments.
+
+```C
+/*
+ * An lthread version of socket(2).
+ * Returns a socket fd.
+ */
+int lthread_socket(int domain, int type, int protocol);
+```
+
+
+```C
+/*
+ * An lthread version of accept(2).
+ */
+int lthread_accept(int fd, struct sockaddr *, socklen_t *);
+```
+
+
+```C
+/*
+ * Close an lthread_socket.
+ */
+int lthread_close(int fd);
+```
+
+
+```C
+/*
+ * An lthread version of connect(2) with an additional argument `timeout` to specify how 
+ * long the function waits before it gives up on connecting.
+ * Returns 0 on a successful connection or -2 if it expired waiting.
+ */
+int lthread_connect(int fd, struct sockaddr *, socklen_t, uint32_t timeout);
+```
+
+
+```C
+/*
+ * An lthread version of recv(2) with an additional argument `timeout` to 
+ * specify how long to wait before it gives up on receiving.
+ * Returns the number of bytes received or -2 if it expired waiting.
+ */
+ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, unsigned int timeout);
+```
+
+```C
+/*
+ * An lthread version of send(2).
+ */
+ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
+```
+
+```C
+/*
+ * An lthread version of writev(2).
+ */
+ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);
+```
+
+*freebsd only*
+
+```C
+/*
+ * An lthread version of FreeBSD sendfile(2).
+ */
+int lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr);
+```
+
 Examples
 --------
 
@@ -253,198 +443,6 @@ main(int argc, char **argv)
     return 0;
 }
 
-```
-
-
-Library calls
--------------
-
-```C
-/*
- * Creates a new lthread and returns it via `*new_lt`.
- * Returns 0 if success, -1 on failure.
- */
-int lthread_create(lthread_t **new_lt, void *fun, void *arg);
-```
-
-```C
-/*
- * Destroys an lthread and cancels any events it was expecting.
- */
-void lthread_destroy(lthread_t *lt);
-```
-
-```C
-/*
- * Blocks until all lthreads created have exited.
- */
-void lthread_join(void);
-```
-
-```C
-/*
- * Moves lthread into a pthread to run its expensive computation or make a blocking 
- * call like `gethostbyname()`.
- * This call *must* be followed by lthread_compute_end() after the computation and/or
- * blocking calls have been made to resume the lthread in its original lthread scheduler.
- * No lthread_* calls can be made during lthread_compute_begin()/lthread_compute_end(). 
- */
- void lthread_compute_begin(void);
-```
-
-```C
-/*
- * Moves lthread from pthread back to the lthread scheduler it was running on.
- */
- void lthread_compute_end(void);
-```
-
-```C
-/*
- * Puts an lthread to sleep until msecs have passed.
- */
-void lthread_sleep(uint64_t msecs);
-```
-
-```C
-/* 
- * Wake up a sleeping lthread. 
- */
-void lthread_wakeup(lthread_t *lt);
-```
-
-```C
-/* 
- * Creates a condition variable that can be used between lthreads to block/signal each other.
- */
-int lthread_cond_create(lthread_cond_t **c);
-```
-
-```C
-/*
- * Puts the lthread calling `lthread_cond_wait` to sleep until `timeout` expires or another thread signals it.
- * Returns 0 if it was signaled or -2 if it expired.
- */
-int lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
-```
-
-
-```C
-/*
- * Signals an lthread blocked on `lthread_cond_wait` to wake up and resume.
- */
-void lthread_cond_signal(lthread_cond_t *c);
-```
-
-
-```C
-/*
- * Returns the value set for the current lthread.
- */
-void *lthread_get_data(void);
-```
-
-```C
-/* 
- * Sets data bound to the lthread. This value can be retrieved anywhere in the lthread using `lthread_get_data()`.
- */
-void lthread_set_data(void *data);
-```
-
-
-```C
-/*
- * Returns the lthread Id.
- */
-uint64_t lthread_id();
-```
-
-
-```C
-/*
- * Returns a pointer to the current lthread.
- */
-lthread_t *lthread_current();
-```
-
-```C
-/*
- * Sets the lthread method name to the current function.
- * It makes debugging easier by knowing which function a specific lthread was executing.
- */
-void lthread_set_funcname(const char *f);
-```
-
-
-###Socket related functions
-
-Refer to the appropriate man pages of each function to learn about their arguments.
-
-```C
-/*
- * An lthread version of socket(2).
- * Returns a socket fd.
- */
-int lthread_socket(int domain, int type, int protocol);
-```
-
-
-```C
-/*
- * An lthread version of accept(2).
- */
-int lthread_accept(int fd, struct sockaddr *, socklen_t *);
-```
-
-
-```C
-/*
- * Close an lthread_socket.
- */
-int lthread_close(int fd);
-```
-
-
-```C
-/*
- * An lthread version of connect(2) with an additional argument `timeout` to specify how 
- * long the function waits before it gives up on connecting.
- * Returns 0 on a successful connection or -2 if it expired waiting.
- */
-int lthread_connect(int fd, struct sockaddr *, socklen_t, uint32_t timeout);
-```
-
-
-```C
-/*
- * An lthread version of recv(2) with an additional argument `timeout` to 
- * specify how long to wait before it gives up on receiving.
- * Returns the number of bytes received or -2 if it expired waiting.
- */
-ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, unsigned int timeout);
-```
-
-```C
-/*
- * An lthread version of send(2).
- */
-ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
-```
-
-```C
-/*
- * An lthread version of writev(2).
- */
-ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);
-```
-
-*freebsd only*
-
-```C
-/*
- * An lthread version of FreeBSD sendfile(2).
- */
-int lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr);
 ```
 
 TODOS
