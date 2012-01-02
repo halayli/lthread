@@ -44,6 +44,7 @@ lthread_compute_begin(void)
     /* create one if there is no scheduler available */
     if (compute_sched == NULL) {
         if ((compute_sched = _lthread_compute_sched_create()) == NULL) {
+	    abort();
             pthread_mutex_unlock(&sched_mutex);
             return -1;
         }
@@ -236,8 +237,10 @@ _lthread_compute_run(void *arg)
             }
 
             lt = LIST_FIRST(&compute_sched->lthreads);
-            if (lt->state & bit(LT_PENDING_RUNCOMPUTE))
+            if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
+                pthread_mutex_unlock(&compute_sched->lthreads_mutex);
                 continue;
+            }
 
             LIST_REMOVE(lt, compute_next);
 

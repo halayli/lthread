@@ -10,7 +10,7 @@ lthread.o: $(src)
 install: lthread.o
 	cp liblthread.so* /usr/lib/
 	cp liblthread.a /usr/lib/
-	cp lthread.h /usr/local/include/
+	cp lthread.h /usr/include/
 
 test: lthread.o
 	gcc -g rbtree.o time.o poller.o lthread_sched.o lthread.o lthread_unit_test.c -o test_lthread
