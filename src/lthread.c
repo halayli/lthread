@@ -106,7 +106,7 @@ static void
 _exec(void *lt)
 {
 
-#ifdef __llvm__ && defined (__x86_64__)
+#if defined(__llvm__) && defined(__x86_64__)
   __asm__ ("movq 16(%%rbp), %[lt]" : [lt] "=r" (lt));
 #endif
     ((lthread_t *)lt)->fun(lt, ((lthread_t *)lt)->arg);
