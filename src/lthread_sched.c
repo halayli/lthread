@@ -86,6 +86,7 @@ _rb_insert(struct rb_root *root, sched_node_t *data)
     return 0;
 }
 
+static char tmp[100];
 void
 lthread_join()
 {
@@ -111,21 +112,34 @@ lthread_join()
             }
         }
 
-        /* 3. check if we received any events after lthread_poll */
+        /* 3. resume lthreads we received from lthread_compute, if any */
+        while (1) {
+            pthread_mutex_lock(&sched->compute_mutex);
+            lt = LIST_FIRST(&sched->compute);
+            if (lt == NULL) {
+                pthread_mutex_unlock(&sched->compute_mutex);
+                break;
+            }
+            LIST_REMOVE(lt, compute_sched_next);
+            pthread_mutex_unlock(&sched->compute_mutex);
+            sched->sleeping_state--;
+            _lthread_resume(lt);
+        }
+
+        /* 4. check if we received any events after lthread_poll */
         register_rd_interest(sched->compute_pipes[0]);
         _lthread_poll();
 
-        /* 4. fire up lthreads that are ready to run */
+        /* 5. fire up lthreads that are ready to run */
         while (sched->total_new_events) {
             p = --sched->total_new_events;
 
-            /* 5. resume lthread_compute thread we received on pipe */
+            /* We got signaled via pipe to wakeup from polling & rusume compute.
+             * Those lthreads will get handled in step 3.
+             */ 
             fd = get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
-                lt = NULL;
-                read(fd, &lt, sizeof(uintptr_t));
-                sched->sleeping_state--;
-                _lthread_resume(lt);
+                read(fd, &tmp, sizeof(tmp));
                 continue;
             }
 
