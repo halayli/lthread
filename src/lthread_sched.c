@@ -210,8 +210,6 @@ _lthread_poll(void)
             t.tv_nsec  =  (usecs % 1000u)  * 1000000u;
         else
             t.tv_nsec = usecs * 1000u;
-    } else {
-        return 0;
     }
 
     if (sched->nevents > MAX_CHANGELIST) {
