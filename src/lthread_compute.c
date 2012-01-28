@@ -150,7 +150,6 @@ _lthread_compute_sched_create(void)
 {
     compute_sched_t *compute_sched = NULL;
     pthread_t pthread;
-    pthread_attr_t attr;
 
     if ((compute_sched = calloc(1, sizeof(compute_sched_t))) == NULL)
         return NULL;
@@ -162,9 +161,8 @@ _lthread_compute_sched_create(void)
         return NULL;
     }
 
-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     if (pthread_create(&pthread,
-        &attr, _lthread_compute_run, compute_sched) != 0) {
+        NULL, _lthread_compute_run, compute_sched) != 0) {
         _lthread_compute_sched_free(compute_sched);
         return NULL;
     }
@@ -237,6 +235,7 @@ _lthread_compute_run(void *arg)
     struct timespec timeout;
     int status = 0;
 
+    pthread_detach(pthread_self());
     pthread_once(&key_once, once_routine);
 
     pthread_setspecific(compute_sched_key, arg);
