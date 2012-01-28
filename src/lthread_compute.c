@@ -150,6 +150,7 @@ _lthread_compute_sched_create(void)
 {
     compute_sched_t *compute_sched = NULL;
     pthread_t pthread;
+    pthread_attr_t attr;
 
     if ((compute_sched = calloc(1, sizeof(compute_sched_t))) == NULL)
         return NULL;
@@ -161,8 +162,9 @@ _lthread_compute_sched_create(void)
         return NULL;
     }
 
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     if (pthread_create(&pthread,
-        NULL, _lthread_compute_run, compute_sched) != 0) {
+        &attr, _lthread_compute_run, compute_sched) != 0) {
         _lthread_compute_sched_free(compute_sched);
         return NULL;
     }
