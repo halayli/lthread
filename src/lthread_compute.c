@@ -166,6 +166,7 @@ _lthread_compute_sched_create(void)
         _lthread_compute_sched_free(compute_sched);
         return NULL;
     }
+    pthread_detach(pthread);
 
     LIST_INIT(&compute_sched->lthreads);
 
@@ -235,7 +236,6 @@ _lthread_compute_run(void *arg)
     struct timespec timeout;
     int status = 0;
 
-    pthread_detach(pthread_self());
     pthread_once(&key_once, once_routine);
 
     pthread_setspecific(compute_sched_key, arg);
