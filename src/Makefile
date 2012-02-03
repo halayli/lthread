@@ -4,12 +4,14 @@ gccflags = "-g"
 
 lthread.o: $(src)
 	gcc -Werror -fPIC -g -I ../ $(gccflags) -Wall -c $(src)
-	gcc -Werror -lpthread -O2 $(gccflags) -shared -W1,-soname,liblthread.so.1 -o liblthread.so *.o
+	gcc -Werror -lpthread -O2 $(gccflags) -shared -Wl,-soname,liblthread.so.1 -o liblthread.so *.o
 	ar -cvq liblthread.a *.o
 
 install: lthread.o
-	cp liblthread.so* /usr/lib/
-	cp lthread.h /usr/include/
+	test -d "$(DESTDIR)$(libdir)" || mkdir -p "$(DESTDIR)$(libdir)"
+	test -d "$(DESTDIR)$(includedir)" || mkdir -p "$(DESTDIR)$(includedir)"
+	cp liblthread.so "$(DESTDIR)$(libdir)"
+	cp lthread.h "$(DESTDIR)$(includedir)"
 
 test: lthread.o
 	gcc -lpthread -g rbtree.o time.o poller.o lthread_sched.o lthread.o lthread_unit_test.c -o test_lthread
