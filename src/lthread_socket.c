@@ -33,6 +33,77 @@
 
 #include "lthread_int.h"
 
+#if defined(__FreeBSD__) || defined(__APPLE__)
+    #define FLAG
+#else
+    #define FLAG | MSG_NOSIGNAL
+#endif
+
+#define LTHREAD_RECV(x, y)                                  \
+x {                                                         \
+    ssize_t ret = 0;                                        \
+    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+    while (1) {                                             \
+        if (lt->state & bit(LT_FDEOF))                      \
+            return -1;                                      \
+        ret = y;                                            \
+        if (ret == -1 && errno != EAGAIN)                   \
+            return -1;                                      \
+        if ((ret == -1 && errno == EAGAIN)) {               \
+            if (timeout) {                                  \
+                _sched_lthread(lt, timeout);                \
+            }                                               \
+            _lthread_wait_for(lt, fd, LT_READ);             \
+            if (lt->state & bit(LT_EXPIRED))                \
+                return -2;                                  \
+        }                                                   \
+        if (ret >= 0)                                       \
+            return ret;                                     \
+    }                                                       \
+}                                                           \
+
+#define LTHREAD_SEND(x, y)                                  \
+x {                                                         \
+    ssize_t ret = 0;                                        \
+    ssize_t sent = 0;                                       \
+    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+    while (sent != length) {                                \
+        if (lt->state & bit(LT_FDEOF))                      \
+            return -1;                                      \
+        ret = y;                                            \
+        if (ret == 0)                                       \
+            return sent;                                    \
+        if (ret > 0)                                        \
+            sent += ret;                                    \
+        if (ret == -1 && errno != EAGAIN) {                 \
+            return -1;                                      \
+        }                                                   \
+        if (ret == -1 && errno == EAGAIN) {                 \
+            _lthread_wait_for(lt, fd, LT_WRITE);            \
+        }                                                   \
+    }                                                       \
+    return sent;                                            \
+}                                                           \
+
+#define LTHREAD_SEND_ONCE(x, y)                             \
+x {                                                         \
+    ssize_t ret = 0;                                        \
+    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+    while (1) {                                             \
+        if (lt->state & bit(LT_FDEOF))                      \
+            return -1;                                      \
+        ret = y;                                            \
+        if (ret >= 0)                                       \
+            return ret;                                     \
+        if (ret == -1 && errno != EAGAIN) {                 \
+            return -1;                                      \
+        }                                                   \
+        if (ret == -1 && errno == EAGAIN) {                 \
+            _lthread_wait_for(lt, fd, LT_WRITE);            \
+        }                                                   \
+    }                                                       \
+}                                                           \
+
 const struct linger nolinger = { .l_onoff = 1, .l_linger = 1 };
 
 int
@@ -119,20 +190,23 @@ lthread_socket(int domain, int type, int protocol)
 }
 
 ssize_t
-lthread_recv(int fd, void *buffer, size_t length, int flags, long timeout)
+lthread_recv_exact(int fd, void *buffer, size_t length, int flags, uint64_t timeout)
 {
     ssize_t ret = 0;
+    ssize_t recvd = 0;
     lthread_t *lt = lthread_get_sched()->current_lthread;
 
-    while (1) {
+    while (recvd != length) {
         if (lt->state & bit(LT_FDEOF))
             return -1;
 
-#if defined(__FreeBSD__) || defined(__APPLE__)
-        ret = recv(fd, buffer, length, flags);
-#else
-        ret = recv(fd, buffer, length, flags | MSG_NOSIGNAL);
-#endif
+        ret = recv(fd, buffer + recvd, length - recvd, flags FLAG);
+
+        if (ret == 0)
+            return recvd;
+
+        if (ret > 0)
+            recvd += ret;
 
         if (ret == -1 && errno != EAGAIN)
             return -1;
@@ -145,50 +219,45 @@ lthread_recv(int fd, void *buffer, size_t length, int flags, long timeout)
             if (lt->state & bit(LT_EXPIRED))
                 return -2;
         }
-
-        if (ret >= 0)
-            return ret;
-    }
-}
-
-ssize_t
-lthread_send(int fd, const void *buffer, size_t length, int flags)
-{
-    ssize_t ret = 0;
-    ssize_t sent = 0;
-    lthread_t *lt = lthread_get_sched()->current_lthread;
-
-    while (sent != length) {
-        if (lt->state & bit(LT_FDEOF))
-            return -1;
-
-#if defined(__FreeBSD__) || defined(__APPLE__)
-        ret = send(fd,((char *)buffer) + sent, length - sent, flags);
-#else
-        ret = send(fd,((char *)buffer) + sent, length - sent, flags | MSG_NOSIGNAL);
-#endif
-
-        if (ret == 0)
-            return sent;
-
-        if (ret > 0)
-            sent += ret;
-
-        if (ret == -1 && errno != EAGAIN) {
-            return -1;
-        }
-
-        if (ret == -1 && errno == EAGAIN) {
-            _lthread_wait_for(lt, fd, LT_WRITE);
-        }
-
     }
 
-    return sent;
+    return recvd;
 }
+
+LTHREAD_RECV(
+    ssize_t lthread_recv(int fd, void *buffer, size_t length, int flags, uint64_t timeout),
+    recv(fd, buffer, length, flags FLAG)
+)
+
+LTHREAD_RECV(
+    ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags, uint64_t timeout),
+    recvmsg(fd, message, flags FLAG)
+)
+
+LTHREAD_RECV(
+    ssize_t lthread_recvfrom(int fd, void *buffer, size_t length, int flags,
+        struct sockaddr *address, socklen_t *address_len, uint64_t timeout),
+    recvfrom(fd, buffer, length, flags FLAG, address, address_len)
+)
+
+LTHREAD_SEND(
+    ssize_t lthread_send(int fd, const void *buffer, size_t length, int flags),
+    send(fd,((char *)buffer) + sent, length - sent, flags FLAG)
+)
+
+LTHREAD_SEND_ONCE(
+    ssize_t lthread_sendmsg(int fd, const struct msghdr *message, int flags),
+    sendmsg(fd, message, flags FLAG)
+)
+
+LTHREAD_SEND_ONCE(
+    ssize_t lthread_sendto(int fd, const void *buffer, size_t length, int flags,
+        const struct sockaddr *dest_addr, socklen_t dest_len),
+    sendto(fd, buffer, length, flags FLAG, dest_addr, dest_len)
+)
 
 int
-lthread_connect(int fd, struct sockaddr *name, socklen_t namelen, long timeout)
+lthread_connect(int fd, struct sockaddr *name, socklen_t namelen, uint64_t timeout)
 {
 
     int ret = 0;

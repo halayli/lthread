@@ -5,17 +5,29 @@
 void a(lthread_t *lt, void *x);
 
 void
-a(lthread_t *lt ,void *x)
+test(char *p)
+{
+    printf("char *p is %p, %c\n", p, *p);
+    *p = 'b';
+}
+
+void
+a(lthread_t *lt ,void *arg)
 {
 	int i = 3;
 	struct timeval t1 = {0, 0};
 	struct timeval t2 = {0, 0};
+    char x = 'a';
+    char *y = &x;
     DEFINE_LTHREAD;
 
+    printf("char *p is %p, %c\n", &x, x);
 	while (i--) {
         lthread_compute_begin();
+            test(y);
             printf("I am A in a compute thread \n");
         lthread_compute_end();
+        printf("char *p became %p, %c\n", &x, x);
         printf("A going for a nap\n");
         lthread_sleep(3000);
         printf("A after sleep: %d\n", i);

@@ -189,9 +189,10 @@ int lthread_close(int fd);
 /*
  * An lthread version of connect(2) with an additional argument `timeout` to specify how 
  * long the function waits before it gives up on connecting.
+ * `timeout` of 0 means no timeout.
  * Returns 0 on a successful connection or -2 if it expired waiting.
  */
-int lthread_connect(int fd, struct sockaddr *, socklen_t, uint32_t timeout);
+int lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
 ```
 
 
@@ -199,9 +200,31 @@ int lthread_connect(int fd, struct sockaddr *, socklen_t, uint32_t timeout);
 /*
  * An lthread version of recv(2) with an additional argument `timeout` to 
  * specify how long to wait before it gives up on receiving.
+ * `timeout` of 0 means no timeout.
  * Returns the number of bytes received or -2 if it expired waiting.
  */
-ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, unsigned int timeout);
+ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
+```
+
+```C
+/*
+ * An lthread version of recvfrom(2) with an additional argument `timeout` to 
+ * specify how long to wait before it gives up on receiving.
+ * `timeout` of 0 means no timeout.
+ * Returns the number of bytes received or -2 if it expired waiting.
+ */
+ssize_t lthread_recvfrom(int fd, void *restrict buffer, size_t length, int flags,
+    struct sockaddr *restrict address, socklen_t *restrict address_len, uint64_t timeout);
+```
+
+```C
+/*
+ * An lthread version of recvmsg(2) with an additional argument `timeout` to 
+ * specify how long to wait before it gives up on receiving.
+ * `timeout` of 0 means no timeout.
+ * Returns the number of bytes received or -2 if it expired waiting.
+ */
+ssize_t lthread_recvmsg(int socket, struct msghdr *message, int flags, uint64_t timeout);
 ```
 
 ```C
@@ -209,6 +232,21 @@ ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, unsigned int
  * An lthread version of send(2).
  */
 ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
+```
+
+```C
+/*
+ * An lthread version of sendmsg(2).
+ */
+ssize_t lthread_sendmsg(int fd, const void *buf, size_t buf_len, int flags);
+```
+
+```C
+/*
+ * An lthread version of sendto(2).
+ */
+ssize_t lthread_sendto(int socket, const void *buffer, size_t length, int flags,
+    const struct sockaddr *dest_addr, socklen_t dest_len);
 ```
 
 ```C

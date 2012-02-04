@@ -57,9 +57,17 @@ int     lthread_accept(int fd, struct sockaddr *, socklen_t *);
 int     lthread_close(int fd);
 void    lthread_set_funcname(const char *f);
 uint64_t lthread_id();
-int     lthread_connect(int fd, struct sockaddr *, socklen_t, uint32_t timeout);
-ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, unsigned int timeout);
+int     lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
+ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
+ssize_t lthread_recv_exact(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
+ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags, uint64_t timeout);
+ssize_t lthread_recvfrom(int fd, void *buffer, size_t length, int flags,
+        struct sockaddr *address, socklen_t *address_len, uint64_t timeout);
+
 ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
+ssize_t lthread_sendmsg(int fd, const struct msghdr *message, int flags);
+ssize_t lthread_sendto(int fd, const void *buffer, size_t length, int flags,
+        const struct sockaddr *dest_addr, socklen_t dest_len);
 ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);
 #ifdef __FreeBSD__
 int     lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_hdtr *hdtr);
