@@ -99,7 +99,7 @@ listener(lthread_t *lt, void *arg)
     sin.sin_addr.s_addr = INADDR_ANY;
     sin.sin_port = htons(3128);
 
-    /* bind to the listening port */ 
+    /* bind to the listening port */
     ret = bind(lsn_fd, (struct sockaddr *)&sin, sizeof(sin));
     if (ret == -1) {
         perror("Failed to bind on port 3128");

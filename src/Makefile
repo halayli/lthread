@@ -13,10 +13,10 @@ install: lthread.o
 	cp lthread.h /usr/include/
 
 test: lthread.o
-	gcc -g rbtree.o time.o poller.o lthread_sched.o lthread.o lthread_unit_test.c -o test_lthread
+	gcc -g rbtree.o time.o poller.o lthread_compute.o lthread_sched.o lthread.o tests/lthread_unit_test.c -o test_lthread
 
 compute_test: lthread.o
-	gcc -lpthread -g rbtree.o time.o poller.o lthread_sched.o lthread.o lthread_compute.o lthread_unit_test_compute.c -o test_lthread
+	gcc -lpthread -g rbtree.o time.o poller.o lthread_sched.o lthread.o lthread_compute.o tests/lthread_unit_test_compute.c -o test_lthread
 
 uninstall: 
 	rm /usr/lib/liblthread.so
