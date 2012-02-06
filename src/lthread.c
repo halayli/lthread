@@ -142,10 +142,13 @@ _lthread_resume(lthread_t *lt)
 
     if (lt->state & bit(LT_EXITED)) {
         if (lt->lt_join) {
+            /* if lthread was sleeping, deschedule it so that it doesn't expire. */
             _desched_lthread(lt->lt_join);
             LIST_INSERT_HEAD(&lthread_get_sched()->new, lt->lt_join, new_next);
             lt->lt_join = NULL;
         }
+
+        /* if lthread is detached, free it, otherwise lthread_join() will */
         if (lt->state & bit(LT_DETACH))
             _lthread_free(lt);
         return -1;
@@ -377,7 +380,8 @@ lthread_destroy(lthread_t *lt)
         LIST_REMOVE(lt, new_next);
     }
 
-    /* if the lthread was in compute pthread then mark it as exited
+    /* 
+     * if the lthread was in compute pthread then mark it as exited
      * to free up once it's done.
      */
     if (lt->state & bit(LT_PENDING_RUNCOMPUTE) ||
@@ -425,6 +429,7 @@ void
 lthread_cond_signal(lthread_cond_t *c)
 {
     if (c->blocked_lthread != NULL) {
+        _desched_lthread(c->blocked_lthread);
         LIST_INSERT_HEAD(&lthread_get_sched()->new, c->blocked_lthread,
             new_next);
     }
@@ -473,6 +478,7 @@ lthread_join(lthread_t *lt, void **ptr, uint64_t timeout)
     lt->lt_join = current;
     current->lt_exit_ptr = ptr;
 
+    /* return if the lthread has exited already */
     if (lt->state & bit(LT_EXITED))
         return 0;
 

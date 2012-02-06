@@ -6,11 +6,11 @@ Introduction
 
 lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads. lthread allows you to make blocking calls and expensive computations inside a coroutine as long as you surround your code with lthread_compute_begin()/lthread_compute_end(), hence combining the advantages of coroutines and pthreads. See the http server example below. 
 
-lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on condition variables as this will block the whole scheduler in the pthread.
+lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on pthread condition variables as this will block the whole scheduler in the pthread.
 
 ![](https://github.com/halayli/lthread/blob/master/images/lthread_scheduler.png?raw=true "Lthread scheduler")
 
-To run an lthread scheduler in each pthread, launch the pthread and create the lthreads using lthread_create() followed by lthread_run() in each pthread.
+To run an lthread scheduler in each pthread, launch a pthread and create lthreads using lthread_create() followed by lthread_run() in each pthread.
 
 
 ### lthread scheduler's inner works
@@ -19,7 +19,7 @@ The lthread scheduler has a main stack that it uses to execute/resume lthreads o
 
 The scheduler is build around epoll/kqueue and uses an rbtree to track which lthreads needs to run next.
 
-If you need to execute an expensive computation or make a blocking call inside an lthread, you can surround the block of code with `lthread_compute_begin()` and `lthread_compute_end()`, which moves the lthread into an lthread_compute_scheduler that runs in a pthread to avoid blocking other lthreads. lthread_compute_schedulers are created when needed and they die after 60 seconds of inactivity. `lthread_compute_begin()` tries to pick an already created and free lthread_compute_scheduler before it creates a new one.
+If you need to execute an expensive computation or make a blocking call inside an lthread, you can surround the block of code with `lthread_compute_begin()` and `lthread_compute_end()`, which moves the lthread into an lthread_compute_scheduler that runs in its own pthread to avoid blocking other lthreads. lthread_compute_schedulers are created when needed and they die after 60 seconds of inactivity. `lthread_compute_begin()` tries to pick an already created and free lthread_compute_scheduler before it creates a new one.
 
 Installation
 ------------
@@ -75,12 +75,13 @@ void lthread_detach(void);
 
 ```C
 /*
- * Blocks the calling thread until lt has exited or timeout occured.
+ * Blocks the calling lthread until lt has exited or timeout occured.
  * In case of timeout, lthread_join returns -2 and lt doesn't get freed.
  * If you don't want to join again on the lt, make sure to call lthread_destroy()
  * to free up the the lthread else a leak occurs.
  * **ptr will get populated by lthread_exit(). ptr cannot be from lthread's
  * stack space.
+ * Joining on a joined lthread has undefined behavior.
  * Returns 0 on success or -2 on timeout.
  */
 int lthread_join(lthread_t *lt, void **ptr, uint_64 timeout);
@@ -134,7 +135,7 @@ int lthread_cond_create(lthread_cond_t **c);
 
 ```C
 /*
- * Puts the lthread calling `lthread_cond_wait` to sleep until `timeout` expires or another thread signals it.
+ * Puts the lthread calling `lthread_cond_wait` to sleep until `timeout` expires or another lthread signals it.
  * Returns 0 if it was signaled or -2 if it expired.
  */
 int lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
@@ -185,6 +186,8 @@ lthread_t *lthread_current();
  * It makes debugging easier by knowing which function a specific lthread was executing.
  */
 void lthread_set_funcname(const char *f);
+
+You can use a shortcut macro `DEFINE_LTHREAD;` to set the function name. 
 ```
 
 ###Socket related functions
@@ -345,6 +348,31 @@ b(lthread_t *lt, void *x)
         printf("b (%d): elapsed is: %ld\n",i ,t2.tv_sec - t1.tv_sec);
     }
     printf("b is exiting\n");
+}
+
+void
+c(lthread_t *lt, void *x)
+{
+    DEFINE_LTHREAD;
+	printf("c is running\n");
+    lthread_compute_begin();
+        sleep(1);
+    lthread_compute_end();
+	printf("c is exiting\n");
+}
+
+void
+d(lthread_t *lt ,void *x)
+{
+	lthread_t *lt_new = NULL;
+
+    DEFINE_LTHREAD;
+    lthread_detach();
+
+    printf("d is running\n");
+    lthread_create(&lt_new, c, NULL);
+    lthread_join(lt_new, NULL, 0);
+    printf("d is done joining on c.\n");
 }
 
 int
