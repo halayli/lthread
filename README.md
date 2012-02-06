@@ -382,6 +382,7 @@ main(int argc, char **argv)
 
     lthread_create(&lt, a, NULL);
     lthread_create(&lt, b, NULL);
+    lthread_create(&lt, d, NULL);
     lthread_run();
 
     return 0;
