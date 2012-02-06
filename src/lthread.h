@@ -40,7 +40,9 @@ char    *lthread_summary();
 
 int     lthread_create(lthread_t **new_lt, void *fun, void *arg);
 void    lthread_destroy(lthread_t *lt);
-void    lthread_join(void);
+void    lthread_run(void);
+int     lthread_join(lthread_t *lt, void **ptr, uint64_t timeout);
+void    lthread_detach(void);
 void    lthread_sleep(uint64_t msecs);
 void    lthread_wakeup(lthread_t *lt);
 int     lthread_cond_create(lthread_cond_t **c);

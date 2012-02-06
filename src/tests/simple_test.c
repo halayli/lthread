@@ -19,6 +19,7 @@ a(lthread_t *lt, void *x)
     int i = 3;
     unsigned long long int ret = 0;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in a\n");
@@ -43,6 +44,7 @@ b(lthread_t *lt, void *x)
     int i = 8;
     unsigned long long int ret = 0;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in b\n");
@@ -91,6 +93,7 @@ d(lthread_t *lt, void *x)
     int i = 21;
     unsigned long long int ret = 0;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in d\n");
@@ -115,6 +118,7 @@ e(lthread_t *lt, void *x)
     int i = 26;
     unsigned long long int ret = 0;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in e\n");
@@ -218,7 +222,7 @@ main(int argc, char **argv)
     lthread_create(&lt, f, NULL);
     lthread_create(&lt, g, NULL);
     lthread_create(&lt, h, NULL);
-    lthread_join();
+    lthread_run();
 
     return 0;
 }

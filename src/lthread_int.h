@@ -93,6 +93,7 @@ typedef enum {
     LT_SLEEPING,    /* lthread is sleeping */
     LT_EXPIRED,     /* lthread has expired and needs to run */
     LT_FDEOF,       /* lthread socket has shut down */
+    LT_DETACH,      /* lthread will free once it's done, otherwise it waits for lthread_join */
     LT_RUNCOMPUTE, /* lthread needs to run on a compute pthread */
     LT_PENDING_RUNCOMPUTE, /* lthread needs to run on a compute pthread */
 } lt_state_t; 
@@ -119,6 +120,8 @@ struct _lthread {
     uint64_t            id;
     int                 fd_wait; /* fd we are waiting on */
     char                funcname[64];
+    lthread_t           *lt_join;
+    void                **lt_exit_ptr;
     LIST_ENTRY(_lthread)    new_next;
     LIST_ENTRY(_lthread)    sleep_next;
     LIST_ENTRY(_lthread)    compute_next;

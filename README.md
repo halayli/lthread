@@ -10,7 +10,7 @@ lthreads run inside an lthread scheduler. The scheduler is hidden from the user 
 
 ![](https://github.com/halayli/lthread/blob/master/images/lthread_scheduler.png?raw=true "Lthread scheduler")
 
-To run an lthread scheduler in each pthread, launch the pthread and create the lthreads using lthread_create() followed by lthread_join() in each pthread.
+To run an lthread scheduler in each pthread, launch the pthread and create the lthreads using lthread_create() followed by lthread_run() in each pthread.
 
 
 ### lthread scheduler's inner works
@@ -59,7 +59,38 @@ void lthread_destroy(lthread_t *lt);
 /*
  * Blocks until all lthreads created have exited.
  */
-void lthread_join(void);
+void lthread_run(void);
+```
+
+```C
+/*
+ * Marks the current lthread as detached, causing it to
+ * get freed once it exits. Otherwise `lthread_join()` must be
+ * called on the lthread to free it up.
+ * If an lthread wasn't marked as detached and wasn't joined on then
+ * a memory leak occurs.
+ */
+void lthread_detach(void);
+```
+
+```C
+/*
+ * Blocks the calling thread until lt has exited or timeout occured.
+ * In case of timeout, lthread_join returns -2 and lt doesn't get freed.
+ * If you don't want to join again on the lt, make sure to call lthread_destroy()
+ * to free up the the lthread else a leak occurs.
+ * **ptr will get populated by lthread_exit(). ptr cannot be from lthread's
+ * stack space.
+ * Returns 0 on success or -2 on timeout.
+ */
+int lthread_join(lthread_t *lt, void **ptr, uint_64 timeout);
+```
+
+```C
+/*
+ * Sets ptr value for the joining lthread and exits lthread.
+ */
+void lthread_exit(void **ptr);
 ```
 
 ```C
@@ -286,6 +317,7 @@ a(lthread_t *lt, void *x)
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in a\n");
+    lthread_detach();
 
     while (i--) {
         gettimeofday(&t1, NULL);
@@ -304,6 +336,7 @@ b(lthread_t *lt, void *x)
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in b\n");
+    lthread_detach();
 
     while (i--) {
         gettimeofday(&t1, NULL);
@@ -321,7 +354,7 @@ main(int argc, char **argv)
 
     lthread_create(&lt, a, NULL);
     lthread_create(&lt, b, NULL);
-    lthread_join();
+    lthread_run();
 
     return 0;
 }
@@ -373,6 +406,7 @@ http_serv(lthread_t *lt, void *arg)
     char *buf = NULL;
     int ret = 0;
     char ipstr[INET6_ADDRSTRLEN];
+    lthread_detach();
 
     inet_ntop(AF_INET, &cli_info->peer_addr.sin_addr, ipstr, INET_ADDRSTRLEN);
     printf("Accepted connection on IP %s\n", ipstr);
@@ -425,6 +459,7 @@ listener(lthread_t *lt, void *arg)
     lthread_t *cli_lt = NULL;
     cli_info_t *cli_info = NULL;
     char ipstr[INET6_ADDRSTRLEN];
+    lthread_detach();
 
     DEFINE_LTHREAD;
 
@@ -476,7 +511,7 @@ main(int argc, char **argv)
     lthread_t *lt = NULL;
 
     lthread_create(&lt, listener, NULL);
-    lthread_join();
+    lthread_run();
 
     return 0;
 }

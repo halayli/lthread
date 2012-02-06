@@ -19,6 +19,7 @@ a(lthread_t *lt, void *x)
     int i = 100;
     unsigned long long int ret = 0, source = 40;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in a\n");
@@ -43,6 +44,7 @@ b(lthread_t *lt, void *x)
     int i = 100;
     unsigned long long int ret = 0, source = 40;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in b\n");
@@ -67,6 +69,7 @@ c(lthread_t *lt, void *x)
     int i = 100;
     unsigned long long int ret = 0, source = 40;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in c\n");
@@ -116,6 +119,7 @@ e(lthread_t *lt, void *x)
     int i = 100;
     unsigned long long int ret = 0, source = 40;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in e\n");
@@ -166,6 +170,7 @@ g(lthread_t *lt, void *x)
     int i = 100;
     unsigned long long int ret = 0, source = 40;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in g\n");
@@ -191,6 +196,7 @@ h(lthread_t *lt, void *x)
     int i = 100;
     unsigned long long int ret = 0, source = 40;
     DEFINE_LTHREAD;
+    lthread_detach();
     struct timeval t1 = {0, 0};
     struct timeval t2 = {0, 0};
     printf("I am in h\n");
@@ -223,7 +229,7 @@ main(int argc, char **argv)
     lthread_create(&lt, f, NULL);
     lthread_create(&lt, g, NULL);
     lthread_create(&lt, h, NULL);
-    lthread_join();
+    lthread_run();
     gettimeofday(&t2, NULL);
     printf("Time elapsed is: %ld\n", t2.tv_sec - t1.tv_sec);
     return 0;

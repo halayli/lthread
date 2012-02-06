@@ -12,6 +12,7 @@ b(lthread_t *lt, void *x)
 	int i = 5;
 	struct timeval t1 = {0, 0};
 	struct timeval t2 = {0, 0};
+    lthread_detach();
 	//printf("I am in b\n");
 	while (i--) {
 		gettimeofday(&t1, NULL);
@@ -30,6 +31,7 @@ c(lthread_t *lt, void *x)
     lthread_t *lt_new = NULL;
 	struct timeval t1 = {0, 0};
 	struct timeval t2 = {0, 0};
+    lthread_detach();
 	DEFINE_LTHREAD;
 	//printf("I am in c\n");
 	while (i--) {
@@ -50,6 +52,7 @@ a(lthread_t *lt ,void *x)
 	//DEFINE_LTHREAD(lt);
 	struct timeval t1 = {0, 0};
 	struct timeval t2 = {0, 0};
+    lthread_detach();
 	//printf("I am in a\n");
 	while (i--) {
 		gettimeofday(&t1, NULL);
@@ -70,7 +73,7 @@ main(int argc, char **argv)
 	lthread_t *lt = NULL;
 
 	lthread_create(&lt, a, NULL);
-	lthread_join();
+	lthread_run();
 
 	return 0;
 }

@@ -20,6 +20,7 @@ a(lthread_t *lt ,void *arg)
     char x = 'a';
     char *y = &x;
     DEFINE_LTHREAD;
+    lthread_detach();
 
     printf("char *p is %p, %c\n", &x, x);
 	while (i--) {
@@ -42,6 +43,7 @@ b(lthread_t *lt ,void *x)
 	struct timeval t1 = {0, 0};
 	struct timeval t2 = {0, 0};
     DEFINE_LTHREAD;
+    lthread_detach();
 
     lthread_sleep(1000);
 	while (i--) {
@@ -62,7 +64,7 @@ main(int argc, char **argv)
 
 	lthread_create(&lt, a, NULL);
 	lthread_create(&lt, b, NULL);
-	lthread_join();
+	lthread_run();
 
 	return 0;
 }

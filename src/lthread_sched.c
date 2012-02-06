@@ -88,7 +88,7 @@ _rb_insert(struct rb_root *root, sched_node_t *data)
 
 static char tmp[100];
 void
-lthread_join()
+lthread_run(void)
 {
     sched_t *sched;
     lthread_t *lt = NULL, *lttmp = NULL;
@@ -218,7 +218,9 @@ _lthread_poll(void)
 
     sched->total_new_events = 0;
     usecs = _min_timeout(sched);
-    if (usecs) {
+
+    /* never sleep if we have an lthread pending in the new queue */
+    if (usecs && LIST_EMPTY(&sched->new)) {
         t.tv_sec =  usecs / 1000000u;
         if (t.tv_sec != 0)
             t.tv_nsec  =  (usecs % 1000u)  * 1000000u;
@@ -236,7 +238,6 @@ _lthread_poll(void)
     if (ret == -1) {
         perror("error adding events to kevent");
         assert(0);
-        //exit(1);
     }
 
     sched->nevents = 0;
@@ -327,12 +328,10 @@ _min_timeout(sched_t *sched)
         return min; 
     }
 
-    if (min > t_diff_usecs) {
+    if (min > t_diff_usecs)
         return (min - t_diff_usecs);
-    }
-    else { /* we are running late on a thread, execute immediately */
+    else /* we are running late on a thread, execute immediately */
         return 0;
-    } 
 
     return 0;
 }

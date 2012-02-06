@@ -110,7 +110,7 @@ _exec(void *lt)
   __asm__ ("movq 16(%%rbp), %[lt]" : [lt] "=r" (lt));
 #endif
     ((lthread_t *)lt)->fun(lt, ((lthread_t *)lt)->arg);
-    ((lthread_t *)lt)->state = bit(LT_EXITED);
+    ((lthread_t *)lt)->state |= bit(LT_EXITED);
 
     _lthread_yield(lt);
 }
@@ -141,7 +141,13 @@ _lthread_resume(lthread_t *lt)
     lthread_get_sched()->current_lthread = NULL;
 
     if (lt->state & bit(LT_EXITED)) {
-        _lthread_free(lt);
+        if (lt->lt_join) {
+            _desched_lthread(lt->lt_join);
+            LIST_INSERT_HEAD(&lthread_get_sched()->new, lt->lt_join, new_next);
+            lt->lt_join = NULL;
+        }
+        if (lt->state & bit(LT_DETACH))
+            _lthread_free(lt);
         return -1;
     } else {
         _save_exec_state(lt);
@@ -370,6 +376,17 @@ lthread_destroy(lthread_t *lt)
     } else { /* it got to be in new queue */
         LIST_REMOVE(lt, new_next);
     }
+
+    /* if the lthread was in compute pthread then mark it as exited
+     * to free up once it's done.
+     */
+    if (lt->state & bit(LT_PENDING_RUNCOMPUTE) ||
+        lt->state & bit(LT_RUNCOMPUTE)) {
+        lt->state |= bit(LT_EXITED);
+        lt->state |= bit(LT_DETACH);
+        return;
+    }
+    _lthread_free(lt);
 }
 
 int
@@ -436,6 +453,51 @@ void lthread_wakeup(lthread_t *lt)
         LIST_INSERT_HEAD(&lt->sched->new, lt, new_next);
         _desched_lthread(lt);
     }
+}
+
+void
+lthread_exit(void *ptr)
+{
+    lthread_t *current = lthread_get_sched()->current_lthread; 
+    if (current->lt_join && current->lt_join->lt_exit_ptr && ptr)
+        *(current->lt_join->lt_exit_ptr) = ptr;
+
+    current->state |= bit(LT_EXITED);
+    _lthread_yield(current);
+}
+
+int
+lthread_join(lthread_t *lt, void **ptr, uint64_t timeout)
+{
+    lthread_t *current = lthread_get_sched()->current_lthread; 
+    lt->lt_join = current;
+    current->lt_exit_ptr = ptr;
+
+    if (lt->state & bit(LT_EXITED))
+        return 0;
+
+    if (timeout)
+        _sched_lthread(current, timeout);
+
+    _lthread_yield(current);
+
+    if (current->state & bit(LT_EXPIRED)) {
+        lt->lt_join = NULL;
+        return -2;
+    } else {
+        _desched_lthread(current);
+    }
+
+    _lthread_free(lt);
+
+    return 0;
+}
+
+inline void
+lthread_detach(void)
+{
+    lthread_t *current = lthread_get_sched()->current_lthread; 
+    current->state |= bit(LT_DETACH); 
 }
 
 int

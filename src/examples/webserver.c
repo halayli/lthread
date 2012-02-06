@@ -32,6 +32,7 @@ http_serv(lthread_t *lt, void *arg)
     char *buf = NULL;
     unsigned long long int ret = 0;
     char ipstr[INET6_ADDRSTRLEN];
+    lthread_detach();
 
     inet_ntop(AF_INET, &cli_info->peer_addr.sin_addr, ipstr, INET_ADDRSTRLEN);
     printf("Accepted connection on IP %s\n", ipstr);
@@ -135,7 +136,7 @@ main(int argc, char **argv)
     lthread_t *lt = NULL;
 
     lthread_create(&lt, listener, NULL);
-    lthread_join();
+    lthread_run();
 
     return 0;
 }
