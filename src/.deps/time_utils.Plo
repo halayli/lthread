@@ -1,6 +1,0 @@
-time_utils.lo time_utils.o: time_utils.c time_utils.h \
-  /usr/include/stdint.h
-
-time_utils.h:
-
-/usr/include/stdint.h:

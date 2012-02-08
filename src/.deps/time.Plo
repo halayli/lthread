@@ -1,5 +1,0 @@
-time.lo time.o: time.c time.h /usr/include/stdint.h
-
-time.h:
-
-/usr/include/stdint.h:
