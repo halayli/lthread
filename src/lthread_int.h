@@ -22,7 +22,7 @@
 #ifndef _LTHREAD_INT_H_
 #define _LTHREAD_INT_H_ 
 
-#include "common/queue.h"
+#include "queue.h"
 #include <sys/types.h>
 #include <errno.h>
 #include <pthread.h>
@@ -34,9 +34,9 @@
 #endif
 
 #include <pthread.h>
-#include <sys/time.h>
-#include "common/time.h"
-#include "common/rbtree.h"
+#include <time.h>
+#include "time_utils.h"
+#include "rbtree.h"
 #include "poller.h"
 
 #define LT_MAX_EVENTS    (500)
