@@ -234,4 +234,3 @@ main(int argc, char **argv)
     printf("Time elapsed is: %ld\n", t2.tv_sec - t1.tv_sec);
     return 0;
 }
-
