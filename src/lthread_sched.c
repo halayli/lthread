@@ -94,6 +94,7 @@ lthread_run(void)
     lthread_t *lt = NULL, *lttmp = NULL;
     int p = 0;
     int fd = 0;
+    int ret = 0;
 
     sched = lthread_get_sched();
 
@@ -139,7 +140,7 @@ lthread_run(void)
              */ 
             fd = get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
-                read(fd, &tmp, sizeof(tmp));
+                ret = read(fd, &tmp, sizeof(tmp));
                 continue;
             }
 
@@ -192,11 +193,11 @@ clear_rd_wr_state(lthread_t *lt)
 {
     if (lt->fd_wait > 0) {
         //printf("%llu state is %d\n", lt->id, lt->state);
-        if (lt->state & bit(LT_WAIT_READ))
+        if (lt->state & bit(LT_WAIT_READ)) {
             lt->state &= clearbit(LT_WAIT_READ);
-        else if (lt->state & bit(LT_WAIT_WRITE))
+        } else if (lt->state & bit(LT_WAIT_WRITE)) {
             lt->state &= clearbit(LT_WAIT_WRITE);
-        else {
+        } else {
             printf("lt->state is %d\n", lt->state);
             assert(0);
         }
@@ -324,9 +325,8 @@ _min_timeout(sched_t *sched)
         in = 1;
     }
 
-    if (!in) {
+    if (!in)
         return min; 
-    }
 
     if (min > t_diff_usecs)
         return (min - t_diff_usecs);

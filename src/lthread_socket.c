@@ -50,9 +50,8 @@ x {                                                         \
         if (ret == -1 && errno != EAGAIN)                   \
             return -1;                                      \
         if ((ret == -1 && errno == EAGAIN)) {               \
-            if (timeout) {                                  \
+            if (timeout)                                    \
                 _sched_lthread(lt, timeout);                \
-            }                                               \
             _lthread_wait_for(lt, fd, LT_READ);             \
             if (lt->state & bit(LT_EXPIRED))                \
                 return -2;                                  \
@@ -75,12 +74,10 @@ x {                                                         \
             return sent;                                    \
         if (ret > 0)                                        \
             sent += ret;                                    \
-        if (ret == -1 && errno != EAGAIN) {                 \
+        if (ret == -1 && errno != EAGAIN)                   \
             return -1;                                      \
-        }                                                   \
-        if (ret == -1 && errno == EAGAIN) {                 \
+        if (ret == -1 && errno == EAGAIN)                   \
             _lthread_wait_for(lt, fd, LT_WRITE);            \
-        }                                                   \
     }                                                       \
     return sent;                                            \
 }                                                           \
@@ -95,12 +92,10 @@ x {                                                         \
         ret = y;                                            \
         if (ret >= 0)                                       \
             return ret;                                     \
-        if (ret == -1 && errno != EAGAIN) {                 \
+        if (ret == -1 && errno != EAGAIN)                   \
             return -1;                                      \
-        }                                                   \
-        if (ret == -1 && errno == EAGAIN) {                 \
+        if (ret == -1 && errno == EAGAIN)                   \
             _lthread_wait_for(lt, fd, LT_WRITE);            \
-        }                                                   \
     }                                                       \
 }                                                           \
 
@@ -121,6 +116,7 @@ lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
             _lthread_wait_for(lt, fd, LT_READ);
             continue;
         }
+
         if (ret > 0)
             break;
 
@@ -212,9 +208,8 @@ lthread_recv_exact(int fd, void *buffer, size_t length, int flags, uint64_t time
             return -1;
 
         if ((ret == -1 && errno == EAGAIN)) {
-            if (timeout) {
+            if (timeout)
                 _sched_lthread(lt, timeout);
-            }
             _lthread_wait_for(lt, fd, LT_READ);
             if (lt->state & bit(LT_EXPIRED))
                 return -2;
@@ -270,13 +265,11 @@ lthread_connect(int fd, struct sockaddr *name, socklen_t namelen, uint64_t timeo
         if (ret == -1 && (errno == EAGAIN || 
             errno == EWOULDBLOCK ||
             errno == EINPROGRESS)) {
-            if (timeout) {
+            if (timeout)
                 _sched_lthread(lt, timeout);
-            }
             _lthread_wait_for(lt, fd, LT_WRITE);
-            if (lt->state & bit(LT_EXPIRED)) {
+            if (lt->state & bit(LT_EXPIRED))
                 return -2;
-            }
             
             ret = 0;
             break;

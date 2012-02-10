@@ -206,9 +206,8 @@ _lthread_init(lthread_t *lt)
 inline int
 _restore_exec_state(lthread_t *lt)
 {
-    if (lt->stack_size) {
+    if (lt->stack_size)
         memcpy(lt->st.esp, lt->stack, lt->stack_size);
-    }
 
     return 0;
 }
@@ -223,9 +222,8 @@ _save_exec_state(lthread_t *lt)
     size = stack_top - lt->st.esp;
 
     if (size && lt->stack_size != size) {
-        if (lt->stack) {
+        if (lt->stack)
             free(lt->stack);
-        }
         if ((lt->stack = calloc(1, size)) == NULL) {
             perror("Failed to allocate memory to save stack\n");
             abort();
@@ -374,11 +372,10 @@ lthread_destroy(lthread_t *lt)
         return;
 
     _desched_lthread(lt);
-    if (lt->fd_wait > 0) { /* was it waiting on an event ? */
+    if (lt->fd_wait > 0) /* was it waiting on an event ? */
         clear_interest(lt->fd_wait);
-    } else { /* it got to be in new queue */
+    else /* it got to be in new queue */
         LIST_REMOVE(lt, new_next);
-    }
 
     /* 
      * if the lthread was in compute pthread then mark it as exited
@@ -408,19 +405,17 @@ lthread_cond_wait(lthread_cond_t *c, uint64_t timeout)
 {
     lthread_t *lt = lthread_get_sched()->current_lthread;
     c->blocked_lthread = lt;
-    if (timeout) {
+    if (timeout)
         _sched_lthread(lt, timeout);
-    }
 
     lt->state |= bit(LT_LOCKED);
     _lthread_yield(lt);
     lt->state &= clearbit(LT_LOCKED);
 
-    if (lt->state & bit(LT_EXPIRED)) {
+    if (lt->state & bit(LT_EXPIRED))
         return -2;
-    } else {
+    else
         _desched_lthread(lt);
-    }
 
     return 0;
 }

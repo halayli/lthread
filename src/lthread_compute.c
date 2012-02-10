@@ -186,9 +186,8 @@ _lthread_compute_save_exec_state(lthread_t *lt)
     size = stack_top - lt->st.esp;
 
     if (size && lt->stack_size != size) {
-        if (lt->stack) {
+        if (lt->stack)
             free(lt->stack);
-        }
         if ((lt->stack = calloc(1, size)) == NULL) {
             perror("Failed to allocate memory to save stack\n");
             abort();
@@ -235,6 +234,7 @@ _lthread_compute_run(void *arg)
     lthread_t *lt = NULL;
     struct timespec timeout;
     int status = 0;
+    int ret = 0;
 
     pthread_once(&key_once, once_routine);
 
@@ -276,7 +276,7 @@ _lthread_compute_run(void *arg)
             pthread_mutex_unlock(&lt->sched->compute_mutex);
 
             /* signal the prev scheduler in case it was sleeping in a poll */
-            write(lt->sched->compute_pipes[1], "1", 1);
+            ret = write(lt->sched->compute_pipes[1], "1", 1);
         }
 
         pthread_mutex_lock(&compute_sched->run_mutex);
