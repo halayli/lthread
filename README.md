@@ -4,9 +4,9 @@ lthread
 Introduction
 ------------
 
-lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads. lthread allows you to make blocking calls and expensive computations inside a coroutine as long as you surround your code with lthread_compute_begin()/lthread_compute_end(), hence combining the advantages of coroutines and pthreads. See the http server example below. 
+lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads. What's special about lthread is that it allows you to make *blocking calls* and *expensive* computations inside a coroutine, providing you with the advantages of coroutines and pthreads. See the http server example below. 
 
-lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on pthread condition variables as this will block the whole scheduler in the pthread.
+lthreads are created in userspace and don't require kernel intervention, they are light weight and ideal for socket programming. lthread scheduler uses a shared stack for all running coroutines to save space, allowing you to create thousands(tested with a million lthreads) of coroutines and maintain a low memory footprint. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load by creating several pthreads, each running it's own lthread scheduler and handling its own share of coroutines. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on pthread condition variables as this will block the whole lthread scheduler in the pthread.
 
 ![](https://github.com/halayli/lthread/blob/master/images/lthread_scheduler.png?raw=true "Lthread scheduler")
 
