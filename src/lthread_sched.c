@@ -28,8 +28,8 @@
 #include <inttypes.h>
 
 #include "lthread_int.h"
-#include "common/time.h"
-#include "common/rbtree.h"
+#include "time_utils.h"
+#include "rbtree.h"
 
 static uint64_t _min_timeout(sched_t *);
 

@@ -29,8 +29,8 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "common/time.h"
-#include "common/rbtree.h"
+#include "time_utils.h"
+#include "rbtree.h"
 #include "lthread_int.h"
 #include "poller.h"
 
