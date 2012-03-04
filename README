@@ -75,7 +75,7 @@ void lthread_detach(void);
 
 ```C
 /*
- * Blocks the calling lthread until lt has exited or timeout occured.
+ * Blocks the calling lthread until lt has exited or timeout occurred.
  * In case of timeout, lthread_join returns -2 and lt doesn't get freed.
  * If you don't want to join again on the lt, make sure to call lthread_destroy()
  * to free up the the lthread else a leak occurs.
@@ -392,7 +392,7 @@ main(int argc, char **argv)
 
 ### An incomplete web server to illustrate some of lthread features
 
-In this example, the dummy http server will accept a connection, runs a relatively expensive fibonacci(35) in lthread_compute_begin() / lthred_compute_end() and replies back.
+In this example, the dummy http server will accept a connection, runs a relatively expensive fibonacci(35) in lthread_compute_begin() / lthread_compute_end() and replies back.
 
 While fibonacci is running, we'll continue to accept new connections and handle them without blocking because fibonacci is running between lthread_compute_begin() and lthread_compute_end(), which moves the lthread into a pthread and resumes it there until lthread_compute_end() is called and that's when it moves back to its previous scheduler.
 
