@@ -101,7 +101,7 @@ void lthread_exit(void **ptr);
  * This call *must* be followed by lthread_compute_end() after the computation and/or
  * blocking calls have been made to resume the lthread in its original lthread scheduler.
  * No lthread_* calls can be made during lthread_compute_begin()/lthread_compute_end(). 
- * WARNGING: local variable addresses change inside lthraed_compute_begin()/lthread_compute_end(),
+ * WARNGING: local variable addresses change inside lthread_compute_begin()/lthread_compute_end(),
  * you MUST NOT access pointers to local variables inside this section. Local variables
  * can still be accessed directly.
  */
