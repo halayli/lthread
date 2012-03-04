@@ -26,9 +26,11 @@ Installation
 
 Currently, lthread is supported on FreeBSD, OS X,  and Linux.
 
-`./configure`
+To build and install, simply:
 
-`sudo make install`
+    ./autogen.sh
+    ./configure
+    sudo make install
 
 Usage
 -----
