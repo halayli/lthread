@@ -324,8 +324,6 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
     }
 
     lt->sched = sched;
-    lt->compute_sched = NULL;
-    lt->stack = NULL;
     lt->stack_size = 0;
     lt->state = bit(LT_NEW);
     lt->id = sched->total_lthreads++;
@@ -334,13 +332,6 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
     lt->arg = arg;
     lt->birth = rdtsc();
     lt->timeout = -1;
-    lt->new_next.le_next = NULL;
-    lt->new_next.le_next = NULL;
-    lt->sleep_next.le_prev = NULL;
-    lt->sleep_next.le_prev = NULL;
-    lt->sleep_list = NULL;
-    lt->sched_node = NULL;
-    lt->data = NULL;
     *new_lt = lt;
     LIST_INSERT_HEAD(&lt->sched->new, lt, new_next);
 
