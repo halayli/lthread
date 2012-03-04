@@ -1,0 +1,7 @@
+*.la
+*.lo
+config.log
+config.status
+Makefile
+src/.deps
+src/.libs
