@@ -94,7 +94,6 @@ lthread_run(void)
     lthread_t *lt = NULL, *lttmp = NULL;
     int p = 0;
     int fd = 0;
-    int ret = 0;
 
     sched = lthread_get_sched();
 
@@ -140,7 +139,7 @@ lthread_run(void)
              */ 
             fd = get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
-                ret = read(fd, &tmp, sizeof(tmp));
+                read(fd, &tmp, sizeof(tmp));
                 continue;
             }
 

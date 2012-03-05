@@ -254,7 +254,6 @@ _lthread_compute_run(void *arg)
     lthread_t *lt = NULL;
     struct timespec timeout;
     int status = 0;
-    int ret = 0;
 
     pthread_once(&key_once, once_routine);
 
@@ -296,7 +295,7 @@ _lthread_compute_run(void *arg)
             pthread_mutex_unlock(&lt->sched->compute_mutex);
 
             /* signal the prev scheduler in case it was sleeping in a poll */
-            ret = write(lt->sched->compute_pipes[1], "1", 1);
+            write(lt->sched->compute_pipes[1], "1", 1);
         }
 
         pthread_mutex_lock(&compute_sched->run_mutex);
