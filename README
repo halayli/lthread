@@ -4,9 +4,9 @@ lthread
 Introduction
 ------------
 
-lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads. lthread allows you to make blocking calls and expensive computations inside a coroutine as long as you surround your code with lthread_compute_begin()/lthread_compute_end(), hence combining the advantages of coroutines and pthreads. See the http server example below. 
+lthread is a multicore/multithread coroutine library written in C. It uses [Sam Rushing's](https://github.com/samrushing) _swap function to swap lthreads. What's special about lthread is that it allows you to make *blocking calls* and *expensive* computations inside a coroutine, providing you with the advantages of coroutines and pthreads. See the http server example below. 
 
-lthreads run inside an lthread scheduler. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on pthread condition variables as this will block the whole scheduler in the pthread.
+lthreads are created in userspace and don't require kernel intervention, they are light weight and ideal for socket programming. lthread scheduler uses a shared stack for all running coroutines to save space, allowing you to create thousands(tested with a million lthreads) of coroutines and maintain a low memory footprint. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load by creating several pthreads, each running it's own lthread scheduler and handling its own share of coroutines. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on pthread condition variables as this will block the whole lthread scheduler in the pthread.
 
 ![](https://github.com/halayli/lthread/blob/master/images/lthread_scheduler.png?raw=true "Lthread scheduler")
 
@@ -26,9 +26,11 @@ Installation
 
 Currently, lthread is supported on FreeBSD, OS X,  and Linux.
 
-`cd src`
+To build and install, simply:
 
-`sudo make install`
+    ./autogen.sh
+    ./configure
+    sudo make install
 
 Usage
 -----
@@ -75,7 +77,7 @@ void lthread_detach(void);
 
 ```C
 /*
- * Blocks the calling lthread until lt has exited or timeout occured.
+ * Blocks the calling lthread until lt has exited or timeout occurred.
  * In case of timeout, lthread_join returns -2 and lt doesn't get freed.
  * If you don't want to join again on the lt, make sure to call lthread_destroy()
  * to free up the the lthread else a leak occurs.
@@ -101,6 +103,9 @@ void lthread_exit(void **ptr);
  * This call *must* be followed by lthread_compute_end() after the computation and/or
  * blocking calls have been made to resume the lthread in its original lthread scheduler.
  * No lthread_* calls can be made during lthread_compute_begin()/lthread_compute_end(). 
+ * WARNING: local variable addresses change inside lthread_compute_begin()/lthread_compute_end(),
+ * you MUST NOT access pointers to local variables inside this section. Local variables
+ * can still be accessed directly.
  */
  void lthread_compute_begin(void);
 ```
@@ -392,7 +397,7 @@ main(int argc, char **argv)
 
 ### An incomplete web server to illustrate some of lthread features
 
-In this example, the dummy http server will accept a connection, runs a relatively expensive fibonacci(35) in lthread_compute_begin() / lthred_compute_end() and replies back.
+In this example, the dummy http server will accept a connection, runs a relatively expensive fibonacci(35) in lthread_compute_begin() / lthread_compute_end() and replies back.
 
 While fibonacci is running, we'll continue to accept new connections and handle them without blocking because fibonacci is running between lthread_compute_begin() and lthread_compute_end(), which moves the lthread into a pthread and resumes it there until lthread_compute_end() is called and that's when it moves back to its previous scheduler.
 

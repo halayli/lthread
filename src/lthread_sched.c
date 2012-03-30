@@ -95,6 +95,7 @@ lthread_run(void)
     int p = 0;
     int fd = 0;
     int ret = 0;
+    (void)ret; /* silence compiler */
 
     sched = lthread_get_sched();
     /* scheduler not initiliazed, and no lthreads where created*/
