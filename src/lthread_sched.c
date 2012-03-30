@@ -97,6 +97,9 @@ lthread_run(void)
     int ret = 0;
 
     sched = lthread_get_sched();
+    /* scheduler not initiliazed, and no lthreads where created*/
+    if (sched == NULL)
+        return;
 
     while (sched->sleeping_state ||
         !LIST_EMPTY(&sched->new) ||
