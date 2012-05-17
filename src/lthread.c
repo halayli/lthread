@@ -176,6 +176,7 @@ static void
 _lthread_key_destructor(void *data)
 {
     free(data);
+    pthread_key_delete(lthread_sched_key);
 }
 
 static void
