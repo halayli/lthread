@@ -117,7 +117,7 @@ _exec(void *lt)
 #if defined(__llvm__) && defined(__x86_64__)
   __asm__ ("movq 16(%%rbp), %[lt]" : [lt] "=r" (lt));
 #endif
-    ((lthread_t *)lt)->fun(lt, ((lthread_t *)lt)->arg);
+    ((lthread_t *)lt)->fun(((lthread_t *)lt)->arg);
     ((lthread_t *)lt)->state |= bit(LT_EXITED);
 
     _lthread_yield(lt);

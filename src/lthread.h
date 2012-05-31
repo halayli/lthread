@@ -46,7 +46,9 @@ typedef struct _lthread_cond lthread_cond_t;
 
 char    *lthread_summary();
 
-int     lthread_create(lthread_t **new_lt, void *fun, void *arg);
+typedef void (*lthread_func)(void *);
+
+int     lthread_create(lthread_t **new_lt, lthread_func, void *arg);
 void    lthread_destroy(lthread_t *lt);
 void    lthread_run(void);
 int     lthread_join(lthread_t *lt, void **ptr, uint64_t timeout);

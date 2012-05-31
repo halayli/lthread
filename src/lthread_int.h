@@ -72,6 +72,8 @@ typedef struct _sched_node_l _sched_node_l_t;
 LIST_HEAD(_lthread_l, _lthread);
 typedef struct _lthread_l lthread_l_t;
 
+typedef void (*lthread_func)(void *);
+
 typedef enum {
     LT_READ,
     LT_WRITE,   
@@ -115,7 +117,7 @@ struct _sched_node {
 
 struct _lthread {
     struct              _cpu_state st;
-    void                (*fun)(lthread_t *lt, void *);
+    lthread_func        fun;
     void                *arg;
     void                *data;
     size_t              stack_size;
