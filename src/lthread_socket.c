@@ -235,11 +235,11 @@ lthread_pipe(int fildes[2])
     if (ret != 0)
         return ret;
 
-    ret = fcntl(files[0], F_SETFL, O_NONBLOCK);
+    ret = fcntl(fildes[0], F_SETFL, O_NONBLOCK);
     if (ret != 0)
         goto err;
 
-    ret = fcntl(files[1], F_SETFL, O_NONBLOCK);
+    ret = fcntl(fildes[1], F_SETFL, O_NONBLOCK);
     if (ret != 0)
         goto err;
 
