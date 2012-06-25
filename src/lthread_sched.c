@@ -111,16 +111,16 @@ lthread_run(void)
         return;
 
     while (sched->sleeping_state ||
-        !LIST_EMPTY(&sched->new) ||
+        !TAILQ_EMPTY(&sched->new) ||
         sched->waiting_state) {
 
         /* 1. start by checking if a sleeping thread needs to wakeup */
         _resume_expired_lthreads(sched);
 
         /* 2. check to see if we have any new threads to run */
-        while (!LIST_EMPTY(&sched->new)) {
-            LIST_FOREACH_SAFE(lt, &sched->new, new_next, lttmp) {
-                LIST_REMOVE(lt, new_next);
+        while (!TAILQ_EMPTY(&sched->new)) {
+            TAILQ_FOREACH_SAFE(lt, &sched->new, new_next, lttmp) {
+                TAILQ_REMOVE(&lt->sched->new, lt, new_next);
                 _lthread_resume(lt);
             }
         }
@@ -160,8 +160,10 @@ lthread_run(void)
             if (lt == NULL)
                 assert(0);
 
-            if (is_eof(&sched->eventlist[p]))
+            if (is_eof(&sched->eventlist[p])) {
                 lt->state |= bit(LT_FDEOF);
+                errno = ECONNRESET;
+            }
 
             _desched_lthread(lt);
             _lthread_resume(lt);
@@ -233,7 +235,7 @@ _lthread_poll(void)
     usecs = _min_timeout(sched);
 
     /* never sleep if we have an lthread pending in the new queue */
-    if (usecs && LIST_EMPTY(&sched->new)) {
+    if (usecs && TAILQ_EMPTY(&sched->new)) {
         t.tv_sec =  usecs / 1000000u;
         if (t.tv_sec != 0)
             t.tv_nsec  =  (usecs % 1000u)  * 1000000u;

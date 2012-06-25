@@ -149,11 +149,17 @@ int lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
 
 ```C
 /*
- * Signals an lthread blocked on `lthread_cond_wait` to wake up and resume.
+ * Signals a single lthread blocked on `lthread_cond_wait` to wake up and resume.
  */
 void lthread_cond_signal(lthread_cond_t *c);
 ```
 
+```C
+/*
+ * Signals all lthreads blocked on `lthread_cond_wait` to wake up and resume.
+ */
+void lthread_cond_broadcast(lthread_cond_t *c);
+```
 
 ```C
 /*
@@ -207,6 +213,13 @@ Refer to the appropriate man pages of each function to learn about their argumen
 int lthread_socket(int domain, int type, int protocol);
 ```
 
+```C
+/*
+ * An lthread version of pipe(2).
+ * Returns -1 on error or 0 on success.
+ */
+int lthread_pipe(int fildes[2]);
+```
 
 ```C
 /*
@@ -234,6 +247,23 @@ int lthread_close(int fd);
 int lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
 ```
 
+```C
+/*
+ * An lthread version of read(2) with an additional argument `timeout` to 
+ * specify how long to wait before it gives up on receiving.
+ * `timeout` of 0 means no timeout.
+ * Returns the number of bytes received or -2 if it expired waiting.
+ * lthread_read is used with pipes while lthread_recv is used for sockets.
+ */
+ssize_t lthread_read(int fd, void *buffer, size_t length, uint64_t timeout);
+
+```C
+/*
+ * Blocks the calling lthread until `length` bytes are read from fd.
+ * Returns the number of bytes read or -2 if it expired waiting or -1 on error.
+ * lthread_read is used with pipes while lthread_recv is used for sockets.
+ */
+ssize_t lthread_read_exact(int fd, void *buffer, size_t length, uint64_t timeout);
 
 ```C
 /*
@@ -244,6 +274,13 @@ int lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
  */
 ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
 ```
+
+```C
+/*
+ * Blocks the calling lthread until `length` bytes are received from the socket.
+ * Returns the number of bytes received or -2 if it expired waiting or -1 on error.
+ */
+ssize_t lthread_recv_exact(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
 
 ```C
 /*

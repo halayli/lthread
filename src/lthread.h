@@ -30,7 +30,7 @@
 #ifndef _LTHREAD_H_
 #define _LTHREAD_H_ 
 
-#include <sys/socket.h>
+include <sys/socket.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <stdint.h>
@@ -47,6 +47,9 @@ typedef struct _lthread_cond lthread_cond_t;
 char    *lthread_summary();
 
 typedef void (*lthread_func)(void *);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int     lthread_create(lthread_t **new_lt, lthread_func, void *arg);
 void    lthread_destroy(lthread_t *lt);
@@ -58,6 +61,7 @@ void    lthread_wakeup(lthread_t *lt);
 int     lthread_cond_create(lthread_cond_t **c);
 int     lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
 void    lthread_cond_signal(lthread_cond_t *c);
+void    lthread_cond_broadcast(lthread_cond_t *c);
 int     lthread_init(size_t size);
 void    *lthread_get_data(void);
 void    lthread_set_data(void *data);
@@ -65,18 +69,22 @@ lthread_t *lthread_current();
 
 /* socket related functions */
 int     lthread_socket(int, int, int);
+int     lthread_pipe(int fildes[2]);
 int     lthread_accept(int fd, struct sockaddr *, socklen_t *);
 int     lthread_close(int fd);
 void    lthread_set_funcname(const char *f);
 uint64_t lthread_id();
 int     lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
 ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
+ssize_t lthread_read(int fd, void *buffer, size_t length, uint64_t timeout);
 ssize_t lthread_recv_exact(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
+ssize_t lthread_read_exact(int fd, void *buffer, size_t length, uint64_t timeout);
 ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags, uint64_t timeout);
 ssize_t lthread_recvfrom(int fd, void *buffer, size_t length, int flags,
         struct sockaddr *address, socklen_t *address_len, uint64_t timeout);
 
 ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
+ssize_t lthread_write(int fd, const void *buf, size_t buf_len);
 ssize_t lthread_sendmsg(int fd, const struct msghdr *message, int flags);
 ssize_t lthread_sendto(int fd, const void *buffer, size_t length, int flags,
         const struct sockaddr *dest_addr, socklen_t dest_len);
@@ -87,5 +95,8 @@ int     lthread_sendfile(int fd, int s, off_t offset, size_t nbytes, struct sf_h
 
 int lthread_compute_begin(void);
 void lthread_compute_end(void);
+#ifdef __cplusplus
+}
+#endif
 
 #endif

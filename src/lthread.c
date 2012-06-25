@@ -126,6 +126,7 @@ _exec(void *lt)
 void
 _lthread_yield(lthread_t *lt) 
 {
+    lt->ops = 0;
     _switch(&lt->sched->st, &lt->st);
 }
 
@@ -152,7 +153,7 @@ _lthread_resume(lthread_t *lt)
         if (lt->lt_join) {
             /* if lthread was sleeping, deschedule it so that it doesn't expire. */
             _desched_lthread(lt->lt_join);
-            LIST_INSERT_HEAD(&lthread_get_sched()->new, lt->lt_join, new_next);
+            TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt->lt_join, new_next);
             lt->lt_join = NULL;
         }
 
@@ -303,7 +304,7 @@ sched_create(size_t stack_size)
     new_sched->sleeping_state = 0;
     new_sched->sleeping = RB_ROOT;
     new_sched->birth = rdtsc();
-    LIST_INIT(&new_sched->new);
+    TAILQ_INIT(&new_sched->new);
 
     bzero(&new_sched->st, sizeof(struct _cpu_state));
 
@@ -341,7 +342,7 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
     lt->birth = rdtsc();
     lt->timeout = -1;
     *new_lt = lt;
-    LIST_INSERT_HEAD(&lt->sched->new, lt, new_next);
+    TAILQ_INSERT_TAIL(&lt->sched->new, lt, new_next);
 
     return 0;
 }
@@ -374,7 +375,7 @@ lthread_destroy(lthread_t *lt)
     if (lt->fd_wait > 0) /* was it waiting on an event ? */
         clear_interest(lt->fd_wait);
     else /* it got to be in new queue */
-        LIST_REMOVE(lt, new_next);
+        TAILQ_REMOVE(&lt->sched->new, lt, new_next);
 
     /* 
      * if the lthread was in compute pthread then mark it as exited
@@ -394,7 +395,8 @@ lthread_cond_create(lthread_cond_t **c)
 {
     if ((*c = calloc(1, sizeof(lthread_cond_t))) == NULL)
         return -1;
-    (*c)->blocked_lthread = NULL;
+
+    TAILQ_INIT(&(*c)->blocked_lthreads);
 
     return 0;
 }
@@ -403,7 +405,7 @@ int
 lthread_cond_wait(lthread_cond_t *c, uint64_t timeout)
 {
     lthread_t *lt = lthread_get_sched()->current_lthread;
-    c->blocked_lthread = lt;
+    TAILQ_INSERT_TAIL(&c->blocked_lthreads, lt, cond_next);
     if (timeout)
         _sched_lthread(lt, timeout);
 
@@ -411,10 +413,12 @@ lthread_cond_wait(lthread_cond_t *c, uint64_t timeout)
     _lthread_yield(lt);
     lt->state &= clearbit(LT_LOCKED);
 
-    if (lt->state & bit(LT_EXPIRED))
+    if (lt->state & bit(LT_EXPIRED)) {
+        TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
         return -2;
-    else
+    } else {
         _desched_lthread(lt);
+    }
 
     return 0;
 }
@@ -422,13 +426,25 @@ lthread_cond_wait(lthread_cond_t *c, uint64_t timeout)
 void
 lthread_cond_signal(lthread_cond_t *c)
 {
-    if (c->blocked_lthread != NULL) {
-        _desched_lthread(c->blocked_lthread);
-        LIST_INSERT_HEAD(&lthread_get_sched()->new, c->blocked_lthread,
-            new_next);
-    }
+    lthread_t *lt = TAILQ_FIRST(&c->blocked_lthreads);
+    if (lt == NULL)
+        return;
+    TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
+    _desched_lthread(lt);
+    TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt, new_next);
+}
 
-    c->blocked_lthread = NULL;
+void
+lthread_cond_broadcast(lthread_cond_t *c)
+{
+    lthread_t *lt = NULL;
+    lthread_t *lttmp = NULL;
+
+    TAILQ_FOREACH_SAFE(lt, &c->blocked_lthreads, cond_next, lttmp) {
+        TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
+        _desched_lthread(lt);
+        TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt, new_next);
+    }
 }
 
 void
@@ -446,10 +462,22 @@ lthread_sleep(uint64_t msecs)
     _lthread_yield(lt);
 }
 
+inline void
+_lthread_renice(lthread_t *lt)
+{
+    lt->ops++;
+    if (lt->ops < 5)
+        return;
+
+    TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt, new_next);
+    _lthread_yield(lt);
+}
+
+
 void lthread_wakeup(lthread_t *lt)
 {
     if (lt->state & bit(LT_SLEEPING)) {
-        LIST_INSERT_HEAD(&lt->sched->new, lt, new_next);
+        TAILQ_INSERT_TAIL(&lt->sched->new, lt, new_next);
         _desched_lthread(lt);
     }
 }

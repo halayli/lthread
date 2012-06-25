@@ -47,8 +47,8 @@
 #include "rbtree.h"
 #include "poller.h"
 
-#define LT_MAX_EVENTS    (500)
-#define MAX_STACK_SIZE (8*1024*1024)
+#define LT_MAX_EVENTS    (1024)
+#define MAX_STACK_SIZE (4*1024*1024)
 
 #define MAX_FD 65535 * 2
 #define MAX_CHANGELIST MAX_FD * 2
@@ -71,6 +71,9 @@ LIST_HEAD(_sched_node_l, _sched_node);
 typedef struct _sched_node_l _sched_node_l_t;
 LIST_HEAD(_lthread_l, _lthread);
 typedef struct _lthread_l lthread_l_t;
+
+TAILQ_HEAD(_lthread_q, _lthread);
+typedef struct _lthread_q lthread_q_t;
 
 typedef void (*lthread_func)(void *);
 
@@ -132,18 +135,20 @@ struct _lthread {
     char                funcname[64];
     lthread_t           *lt_join;
     void                **lt_exit_ptr;
-    LIST_ENTRY(_lthread)    new_next;
+    TAILQ_ENTRY(_lthread)    new_next;
     LIST_ENTRY(_lthread)    sleep_next;
     LIST_ENTRY(_lthread)    compute_next;
     LIST_ENTRY(_lthread)    compute_sched_next;
+    TAILQ_ENTRY(_lthread)    cond_next;
     sched_node_t        *sched_node;
     lthread_l_t         *sleep_list;
     void                *stack;
     void                *ebp;
+    uint32_t            ops;
 };
 
 struct _lthread_cond {
-    lthread_t *blocked_lthread;
+    lthread_q_t blocked_lthreads;
 };
 
 struct _sched {
@@ -156,7 +161,7 @@ struct _sched {
     uint64_t            default_timeout;
     int                 total_new_events;
     /* lists to save an lthread depending on its state */
-    lthread_l_t         new;
+    lthread_q_t         new;
     lthread_l_t         compute;
     struct rb_root      sleeping;
     uint64_t            birth;
@@ -191,6 +196,7 @@ struct _compute_sched {
 };
 
 int     _lthread_resume(lthread_t *lt);
+inline void    _lthread_renice(lthread_t *lt);
 void    _sched_free(sched_t *sched);
 void    _lthread_del_event(lthread_t *lt);
 

@@ -54,6 +54,7 @@ x {                                                         \
     while (1) {                                             \
         if (lt->state & bit(LT_FDEOF))                      \
             return -1;                                      \
+        _lthread_renice(lt);                                \
         ret = y;                                            \
         if (ret == -1 && errno != EAGAIN)                   \
             return -1;                                      \
@@ -69,6 +70,36 @@ x {                                                         \
     }                                                       \
 }                                                           \
 
+#define LTHREAD_RECV_EXACT(x, y)                            \
+x {                                                         \
+    ssize_t ret = 0;                                        \
+    ssize_t recvd = 0;                                      \
+    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+                                                            \
+    while (recvd != length) {                               \
+        if (lt->state & bit(LT_FDEOF))                      \
+            return -1;                                      \
+                                                            \
+        _lthread_renice(lt);                                \
+        ret = y;                                            \
+        if (ret == 0)                                       \
+            return recvd;                                   \
+        if (ret > 0)                                        \
+            recvd += ret;                                   \
+        if (ret == -1 && errno != EAGAIN)                   \
+            return -1;                                      \
+        if ((ret == -1 && errno == EAGAIN)) {               \
+            if (timeout)                                    \
+                _sched_lthread(lt, timeout);                \
+            _lthread_wait_for(lt, fd, LT_READ);             \
+            if (lt->state & bit(LT_EXPIRED))                \
+                return -2;                                  \
+        }                                                   \
+    }                                                       \
+    return recvd;                                           \
+}                                                           \
+
+
 #define LTHREAD_SEND(x, y)                                  \
 x {                                                         \
     ssize_t ret = 0;                                        \
@@ -77,6 +108,7 @@ x {                                                         \
     while (sent != length) {                                \
         if (lt->state & bit(LT_FDEOF))                      \
             return -1;                                      \
+        _lthread_renice(lt);                                \
         ret = y;                                            \
         if (ret == 0)                                       \
             return sent;                                    \
@@ -116,6 +148,7 @@ lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
     lthread_t *lt = lthread_get_sched()->current_lthread;
 
     while (1) {
+        _lthread_renice(lt);
         ret = accept(fd, addr, len);
         if (ret == -1 && 
             (errno == ENFILE || 
@@ -193,43 +226,49 @@ lthread_socket(int domain, int type, int protocol)
     return fd;
 }
 
-ssize_t
-lthread_recv_exact(int fd, void *buffer, size_t length, int flags, uint64_t timeout)
+int
+lthread_pipe(int fildes[2])
 {
-    ssize_t ret = 0;
-    ssize_t recvd = 0;
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    int ret = 0;
 
-    while (recvd != length) {
-        if (lt->state & bit(LT_FDEOF))
-            return -1;
+    ret = pipe(fildes);
+    if (ret != 0)
+        return ret;
 
-        ret = recv(fd, buffer + recvd, length - recvd, flags FLAG);
+    ret = fcntl(files[0], F_SETFL, O_NONBLOCK);
+    if (ret != 0)
+        goto err;
 
-        if (ret == 0)
-            return recvd;
+    ret = fcntl(files[1], F_SETFL, O_NONBLOCK);
+    if (ret != 0)
+        goto err;
 
-        if (ret > 0)
-            recvd += ret;
+    return 0;
 
-        if (ret == -1 && errno != EAGAIN)
-            return -1;
-
-        if ((ret == -1 && errno == EAGAIN)) {
-            if (timeout)
-                _sched_lthread(lt, timeout);
-            _lthread_wait_for(lt, fd, LT_READ);
-            if (lt->state & bit(LT_EXPIRED))
-                return -2;
-        }
-    }
-
-    return recvd;
+err:
+    close(fildes[0]);
+    close(fildes[1]);
+    return ret;
 }
 
 LTHREAD_RECV(
     ssize_t lthread_recv(int fd, void *buffer, size_t length, int flags, uint64_t timeout),
     recv(fd, buffer, length, flags FLAG)
+)
+
+LTHREAD_RECV(
+    ssize_t lthread_read(int fd, void *buffer, size_t length, uint64_t timeout),
+    read(fd, buffer, length)
+)
+
+LTHREAD_RECV_EXACT(
+        ssize_t lthread_recv_exact(int fd, void *buffer, size_t length, int flags, uint64_t timeout),
+        recv(fd, buffer + recvd, length - recvd, flags FLAG)
+)
+
+LTHREAD_RECV_EXACT(
+        ssize_t lthread_read_exact(int fd, void *buffer, size_t length, uint64_t timeout),
+        read(fd, buffer + recvd, length - recvd)
 )
 
 LTHREAD_RECV(
@@ -245,7 +284,12 @@ LTHREAD_RECV(
 
 LTHREAD_SEND(
     ssize_t lthread_send(int fd, const void *buffer, size_t length, int flags),
-    send(fd,((char *)buffer) + sent, length - sent, flags FLAG)
+    send(fd, ((char *)buffer) + sent, length - sent, flags FLAG)
+)
+
+LTHREAD_SEND(
+    ssize_t lthread_write(int fd, const void *buffer, size_t length),
+    write(fd, ((char *)buffer) + sent, length - sent)
 )
 
 LTHREAD_SEND_ONCE(
@@ -267,6 +311,7 @@ lthread_connect(int fd, struct sockaddr *name, socklen_t namelen, uint64_t timeo
     lthread_t *lt = lthread_get_sched()->current_lthread;
 
     while (1) {
+        _lthread_renice(lt);
         ret = connect(fd, name, namelen);
         if (ret == 0)
             break;
@@ -297,6 +342,7 @@ lthread_writev(int fd, struct iovec *iov, int iovcnt)
     lthread_t *lt = lthread_get_sched()->current_lthread;
 
     do {
+        _lthread_renice(lt);
         ssize_t n = writev(fd, iov + iov_index, iovcnt - iov_index);
         if (n > 0) {
             int i = 0;
