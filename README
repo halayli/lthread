@@ -256,6 +256,7 @@ int lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
  * lthread_read is used with pipes while lthread_recv is used for sockets.
  */
 ssize_t lthread_read(int fd, void *buffer, size_t length, uint64_t timeout);
+```
 
 ```C
 /*
@@ -308,6 +309,13 @@ ssize_t lthread_recvmsg(int socket, struct msghdr *message, int flags, uint64_t 
  * An lthread version of send(2).
  */
 ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
+```
+
+```C
+/*
+ * An lthread version of write(2).
+ */
+ssize_t lthread_write(int fd, const void *buf, size_t buf_len);
 ```
 
 ```C
