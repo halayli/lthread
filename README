@@ -265,6 +265,7 @@ ssize_t lthread_read(int fd, void *buffer, size_t length, uint64_t timeout);
  * lthread_read is used with pipes while lthread_recv is used for sockets.
  */
 ssize_t lthread_read_exact(int fd, void *buffer, size_t length, uint64_t timeout);
+```
 
 ```C
 /*
@@ -282,6 +283,7 @@ ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, uint64_t tim
  * Returns the number of bytes received or -2 if it expired waiting or -1 on error.
  */
 ssize_t lthread_recv_exact(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
+```
 
 ```C
 /*
