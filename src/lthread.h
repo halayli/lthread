@@ -30,7 +30,7 @@
 #ifndef _LTHREAD_H_
 #define _LTHREAD_H_ 
 
-include <sys/socket.h>
+#include <sys/socket.h>
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <stdint.h>
@@ -75,18 +75,19 @@ int     lthread_close(int fd);
 void    lthread_set_funcname(const char *f);
 uint64_t lthread_id();
 int     lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
-ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
-ssize_t lthread_read(int fd, void *buffer, size_t length, uint64_t timeout);
-ssize_t lthread_recv_exact(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
-ssize_t lthread_read_exact(int fd, void *buffer, size_t length, uint64_t timeout);
+ssize_t lthread_recv(int fd, void *buf, size_t buf_len, int flags, uint64_t timeout);
+ssize_t lthread_read(int fd, void *buf, size_t length, uint64_t timeout);
+ssize_t lthread_readline(int fd, char **buf, size_t max, uint64_t timeout);
+ssize_t lthread_recv_exact(int fd, void *buf, size_t buf_len, int flags, uint64_t timeout);
+ssize_t lthread_read_exact(int fd, void *buf, size_t length, uint64_t timeout);
 ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags, uint64_t timeout);
-ssize_t lthread_recvfrom(int fd, void *buffer, size_t length, int flags,
+ssize_t lthread_recvfrom(int fd, void *buf, size_t length, int flags,
         struct sockaddr *address, socklen_t *address_len, uint64_t timeout);
 
 ssize_t lthread_send(int fd, const void *buf, size_t buf_len, int flags);
 ssize_t lthread_write(int fd, const void *buf, size_t buf_len);
 ssize_t lthread_sendmsg(int fd, const struct msghdr *message, int flags);
-ssize_t lthread_sendto(int fd, const void *buffer, size_t length, int flags,
+ssize_t lthread_sendto(int fd, const void *buf, size_t length, int flags,
         const struct sockaddr *dest_addr, socklen_t dest_len);
 ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);
 #ifdef __FreeBSD__

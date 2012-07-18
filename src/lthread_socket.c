@@ -226,6 +226,39 @@ lthread_socket(int domain, int type, int protocol)
     return fd;
 }
 
+/* forward declare lthread_recv for use in readline */
+ssize_t lthread_recv(int fd, void *buf, size_t buf_len, int flags, uint64_t timeout);
+
+ssize_t
+lthread_readline(int fd, char **buf, size_t max, uint64_t timeout)
+{
+    size_t cur = 0;
+    ssize_t r = 0;
+    size_t total_read = 0;
+    char *data = NULL;
+
+    data = calloc(1, max + 1);
+    if (data == NULL)
+        return (-1);
+
+    while (total_read < max) {
+        r = lthread_recv(fd, data + total_read, 1, 0, timeout);
+
+        if (r == 0 || r == -2 || r == -1) {
+            free(data);
+            return (r);
+        }
+
+        total_read += 1;
+        if (data[cur++] == '\n')
+            break;
+    }
+
+    *buf = data;
+
+    return (total_read);
+}
+
 int
 lthread_pipe(int fildes[2])
 {
@@ -252,23 +285,23 @@ err:
 }
 
 LTHREAD_RECV(
-    ssize_t lthread_recv(int fd, void *buffer, size_t length, int flags, uint64_t timeout),
-    recv(fd, buffer, length, flags FLAG)
+    ssize_t lthread_recv(int fd, void *buf, size_t length, int flags, uint64_t timeout),
+    recv(fd, buf, length, flags FLAG)
 )
 
 LTHREAD_RECV(
-    ssize_t lthread_read(int fd, void *buffer, size_t length, uint64_t timeout),
-    read(fd, buffer, length)
+    ssize_t lthread_read(int fd, void *buf, size_t length, uint64_t timeout),
+    read(fd, buf, length)
 )
 
 LTHREAD_RECV_EXACT(
-        ssize_t lthread_recv_exact(int fd, void *buffer, size_t length, int flags, uint64_t timeout),
-        recv(fd, buffer + recvd, length - recvd, flags FLAG)
+        ssize_t lthread_recv_exact(int fd, void *buf, size_t length, int flags, uint64_t timeout),
+        recv(fd, buf + recvd, length - recvd, flags FLAG)
 )
 
 LTHREAD_RECV_EXACT(
-        ssize_t lthread_read_exact(int fd, void *buffer, size_t length, uint64_t timeout),
-        read(fd, buffer + recvd, length - recvd)
+        ssize_t lthread_read_exact(int fd, void *buf, size_t length, uint64_t timeout),
+        read(fd, buf + recvd, length - recvd)
 )
 
 LTHREAD_RECV(
@@ -277,19 +310,19 @@ LTHREAD_RECV(
 )
 
 LTHREAD_RECV(
-    ssize_t lthread_recvfrom(int fd, void *buffer, size_t length, int flags,
+    ssize_t lthread_recvfrom(int fd, void *buf, size_t length, int flags,
         struct sockaddr *address, socklen_t *address_len, uint64_t timeout),
-    recvfrom(fd, buffer, length, flags FLAG, address, address_len)
+    recvfrom(fd, buf, length, flags FLAG, address, address_len)
 )
 
 LTHREAD_SEND(
-    ssize_t lthread_send(int fd, const void *buffer, size_t length, int flags),
-    send(fd, ((char *)buffer) + sent, length - sent, flags FLAG)
+    ssize_t lthread_send(int fd, const void *buf, size_t length, int flags),
+    send(fd, ((char *)buf) + sent, length - sent, flags FLAG)
 )
 
 LTHREAD_SEND(
-    ssize_t lthread_write(int fd, const void *buffer, size_t length),
-    write(fd, ((char *)buffer) + sent, length - sent)
+    ssize_t lthread_write(int fd, const void *buf, size_t length),
+    write(fd, ((char *)buf) + sent, length - sent)
 )
 
 LTHREAD_SEND_ONCE(
@@ -298,9 +331,9 @@ LTHREAD_SEND_ONCE(
 )
 
 LTHREAD_SEND_ONCE(
-    ssize_t lthread_sendto(int fd, const void *buffer, size_t length, int flags,
+    ssize_t lthread_sendto(int fd, const void *buf, size_t length, int flags,
         const struct sockaddr *dest_addr, socklen_t dest_len),
-    sendto(fd, buffer, length, flags FLAG, dest_addr, dest_len)
+    sendto(fd, buf, length, flags FLAG, dest_addr, dest_len)
 )
 
 int
