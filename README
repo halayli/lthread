@@ -28,8 +28,7 @@ Currently, lthread is supported on FreeBSD, OS X,  and Linux.
 
 To build and install, simply:
 
-    ./autogen.sh
-    ./configure
+    cmake .
     sudo make install
 
 Usage
