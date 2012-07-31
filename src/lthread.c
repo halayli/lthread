@@ -140,6 +140,19 @@ _lthread_free(lthread_t *lt)
 int
 _lthread_resume(lthread_t *lt)
 {
+    if (lt->state & bit(LT_CANCELLED)) {
+        /* if an lthread was joining on it, schedule it to run */
+        if (lt->lt_join) {
+            _desched_lthread(lt->lt_join);
+            TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt->lt_join, new_next);
+            lt->lt_join = NULL;
+        }
+        /* if lthread is detached, then we can free it up */
+        if (lt->state & bit(LT_DETACH))
+            _lthread_free(lt);
+        return 0;
+    }
+
     if (lt->state & bit(LT_NEW))
         _lthread_init(lt);
 
@@ -151,7 +164,7 @@ _lthread_resume(lthread_t *lt)
 
     if (lt->state & bit(LT_EXITED)) {
         if (lt->lt_join) {
-            /* if lthread was sleeping, deschedule it so that it doesn't expire. */
+            /* if lthread was sleeping, deschedule it so it doesn't expire. */
             _desched_lthread(lt->lt_join);
             TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt->lt_join, new_next);
             lt->lt_join = NULL;
@@ -163,7 +176,7 @@ _lthread_resume(lthread_t *lt)
         return -1;
     } else {
         _save_exec_state(lt);
-        /* place it in a compute scheduler if needed.  */
+        /* place it in a compute scheduler if needed. */
         if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
             _lthread_compute_add(lt);
             lthread_get_sched()->sleeping_state++;
@@ -366,28 +379,21 @@ lthread_current(void)
 }
 
 void
-lthread_destroy(lthread_t *lt)
+lthread_cancel(lthread_t *lt)
 {
     if (lt == NULL)
         return;
 
-    _desched_lthread(lt);
-    if (lt->fd_wait > 0) /* was it waiting on an event ? */
-        clear_interest(lt->fd_wait);
-    else /* it got to be in new queue */
-        TAILQ_REMOVE(&lt->sched->new, lt, new_next);
-
+    lt->state |= bit(LT_CANCELLED);
     /* 
-     * if the lthread was in compute pthread then mark it as exited
-     * to free up once it's done.
+     * we don't schedule the cancelled lthread if it was running in a compute
+     * scheduler or pending to run in a compute scheduler. otherwise it could
+     * get freed while it's still running.
      */
     if (lt->state & bit(LT_PENDING_RUNCOMPUTE) ||
-        lt->state & bit(LT_RUNCOMPUTE)) {
-        lt->state |= bit(LT_EXITED);
-        lt->state |= bit(LT_DETACH);
+        lt->state & bit(LT_RUNCOMPUTE))
         return;
-    }
-    _lthread_free(lt);
+    TAILQ_INSERT_TAIL(&lt->sched->new, lt, new_next);
 }
 
 int
@@ -499,10 +505,11 @@ lthread_join(lthread_t *lt, void **ptr, uint64_t timeout)
     lthread_t *current = lthread_get_sched()->current_lthread; 
     lt->lt_join = current;
     current->lt_exit_ptr = ptr;
+    int ret = 0;
 
-    /* return if the lthread has exited already */
+    /* abort if the lthread has exited already */
     if (lt->state & bit(LT_EXITED))
-        return 0;
+        abort();
 
     if (timeout)
         _sched_lthread(current, timeout);
@@ -512,13 +519,14 @@ lthread_join(lthread_t *lt, void **ptr, uint64_t timeout)
     if (current->state & bit(LT_EXPIRED)) {
         lt->lt_join = NULL;
         return -2;
-    } else {
-        _desched_lthread(current);
     }
+
+    if (lt->state & bit(LT_CANCELLED))
+        ret = -1;
 
     _lthread_free(lt);
 
-    return 0;
+    return ret;
 }
 
 inline void

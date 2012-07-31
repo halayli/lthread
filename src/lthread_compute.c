@@ -127,7 +127,6 @@ lthread_compute_end(void)
     /* get current compute scheduler */
     compute_sched_t *compute_sched =  pthread_getspecific(compute_sched_key);
     lthread_t *lt = compute_sched->current_lthread;
-    lt->state &= clearbit(LT_RUNCOMPUTE);
     _switch(&compute_sched->st, &lt->st);
     /* restore ebp back to its relative old stack address */
 #ifdef __i386__
@@ -306,6 +305,7 @@ _lthread_compute_run(void *arg)
 
             /* signal the prev scheduler in case it was sleeping in a poll */
             ret = write(lt->sched->compute_pipes[1], "1", 1);
+            lt->state &= clearbit(LT_RUNCOMPUTE);
         }
 
         pthread_mutex_lock(&compute_sched->run_mutex);

@@ -106,8 +106,9 @@ typedef enum {
     LT_SLEEPING,    /* lthread is sleeping */
     LT_EXPIRED,     /* lthread has expired and needs to run */
     LT_FDEOF,       /* lthread socket has shut down */
-    LT_DETACH,      /* lthread will free once it's done, otherwise it waits for lthread_join */
-    LT_RUNCOMPUTE, /* lthread needs to run on a compute pthread */
+    LT_DETACH,      /* lthread will free when it's done, else it wait to join */
+    LT_CANCELLED,   /* lthread has been cancelled */
+    LT_RUNCOMPUTE,  /* lthread needs to run on a compute pthread */
     LT_PENDING_RUNCOMPUTE, /* lthread needs to run on a compute pthread */
 } lt_state_t; 
 

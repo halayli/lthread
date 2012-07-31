@@ -52,7 +52,7 @@ extern "C" {
 #endif
 
 int     lthread_create(lthread_t **new_lt, lthread_func, void *arg);
-void    lthread_destroy(lthread_t *lt);
+void    lthread_cancel(lthread_t *lt);
 void    lthread_run(void);
 int     lthread_join(lthread_t *lt, void **ptr, uint64_t timeout);
 void    lthread_detach(void);
