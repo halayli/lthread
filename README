@@ -51,9 +51,9 @@ int lthread_create(lthread_t **new_lt, void *fun, void *arg);
 
 ```C
 /*
- * Destroys an lthread and cancels any events it was expecting.
+ * Cancels an lthread and events it was expecting.
  */
-void lthread_destroy(lthread_t *lt);
+void lthread_cancel(lthread_t *lt);
 ```
 
 ```C
@@ -78,12 +78,12 @@ void lthread_detach(void);
 /*
  * Blocks the calling lthread until lt has exited or timeout occurred.
  * In case of timeout, lthread_join returns -2 and lt doesn't get freed.
- * If you don't want to join again on the lt, make sure to call lthread_destroy()
- * to free up the the lthread else a leak occurs.
+ * If target lthread was cancelled, it returns -1 and the target lthread
+ * will be freed.
  * **ptr will get populated by lthread_exit(). ptr cannot be from lthread's
  * stack space.
  * Joining on a joined lthread has undefined behavior.
- * Returns 0 on success or -2 on timeout.
+ * Returns 0 on success, -1 on cancelled target lthread, -2 on timeout.
  */
 int lthread_join(lthread_t *lt, void **ptr, uint_64 timeout);
 ```
