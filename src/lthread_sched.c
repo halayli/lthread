@@ -205,7 +205,7 @@ _lthread_wait_for(lthread_t *lt, int fd, lt_event_t e)
 void
 clear_rd_wr_state(lthread_t *lt)
 {
-    if (lt->fd_wait > 0) {
+    if (lt->fd_wait >= 0) {
         //printf("%llu state is %d\n", lt->id, lt->state);
         if (lt->state & bit(LT_WAIT_READ)) {
             lt->state &= clearbit(LT_WAIT_READ);
