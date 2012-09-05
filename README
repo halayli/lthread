@@ -41,6 +41,12 @@ Pass `-llthread` to gcc to use lthread in your program.
 Library calls
 -------------
 
+### Timeout Notes
+
+Timeout is in milliseconds for functions that takes `timeout` argument
+
+Timeout value of 0 means never timeout.
+
 ```C
 /*
  * Creates a new lthread and returns it via `*new_lt`.
@@ -240,7 +246,6 @@ int lthread_close(int fd);
 /*
  * An lthread version of connect(2) with an additional argument `timeout` to specify how 
  * long the function waits before it gives up on connecting.
- * `timeout` of 0 means no timeout.
  * Returns 0 on a successful connection or -2 if it expired waiting.
  */
 int lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
@@ -250,7 +255,6 @@ int lthread_connect(int fd, struct sockaddr *, socklen_t, uint64_t timeout);
 /*
  * An lthread version of read(2) with an additional argument `timeout` to 
  * specify how long to wait before it gives up on receiving.
- * `timeout` of 0 means no timeout.
  * Returns the number of bytes received or -2 if it expired waiting.
  * lthread_read is used with pipes while lthread_recv is used for sockets.
  */
@@ -268,9 +272,8 @@ ssize_t lthread_read_exact(int fd, void *buffer, size_t length, uint64_t timeout
 
 ```C
 /*
- * An lthread version of recv(2) with an additional argument `timeout` to 
+ * An lthread version of recv(2) with an additional argument `timeout` to
  * specify how long to wait before it gives up on receiving.
- * `timeout` of 0 means no timeout.
  * Returns the number of bytes received or -2 if it expired waiting.
  */
 ssize_t lthread_recv(int fd, void * buf, size_t buf_len, int flags, uint64_t timeout);
@@ -288,7 +291,6 @@ ssize_t lthread_recv_exact(int fd, void * buf, size_t buf_len, int flags, uint64
 /*
  * An lthread version of recvfrom(2) with an additional argument `timeout` to 
  * specify how long to wait before it gives up on receiving.
- * `timeout` of 0 means no timeout.
  * Returns the number of bytes received or -2 if it expired waiting.
  */
 ssize_t lthread_recvfrom(int fd, void *restrict buffer, size_t length, int flags,
@@ -299,7 +301,6 @@ ssize_t lthread_recvfrom(int fd, void *restrict buffer, size_t length, int flags
 /*
  * An lthread version of recvmsg(2) with an additional argument `timeout` to 
  * specify how long to wait before it gives up on receiving.
- * `timeout` of 0 means no timeout.
  * Returns the number of bytes received or -2 if it expired waiting.
  */
 ssize_t lthread_recvmsg(int socket, struct msghdr *message, int flags, uint64_t timeout);
