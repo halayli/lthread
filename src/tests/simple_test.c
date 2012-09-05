@@ -14,7 +14,7 @@ fibonacci(unsigned long long int n)
 }
 
 void
-a(lthread_t *lt, void *x)
+a(void *x)
 {
     int i = 3;
     unsigned long long int ret = 0;
@@ -39,7 +39,7 @@ a(lthread_t *lt, void *x)
 }
 
 void
-b(lthread_t *lt, void *x)
+b(void *x)
 {
     int i = 8;
     unsigned long long int ret = 0;
@@ -64,7 +64,7 @@ b(lthread_t *lt, void *x)
 }
 
 void
-c(lthread_t *lt, void *x)
+c(void *x)
 {
     int i = 15;
     unsigned long long int ret = 0;
@@ -88,7 +88,7 @@ c(lthread_t *lt, void *x)
 }
 
 void
-d(lthread_t *lt, void *x)
+d(void *x)
 {
     int i = 21;
     unsigned long long int ret = 0;
@@ -113,7 +113,7 @@ d(lthread_t *lt, void *x)
 }
 
 void
-e(lthread_t *lt, void *x)
+e(void *x)
 {
     int i = 26;
     unsigned long long int ret = 0;
@@ -138,7 +138,7 @@ e(lthread_t *lt, void *x)
 }
 
 void
-f(lthread_t *lt, void *x)
+f(void *x)
 {
     int i = 31;
     unsigned long long int ret = 0;
@@ -162,7 +162,7 @@ f(lthread_t *lt, void *x)
 }
 
 void
-g(lthread_t *lt, void *x)
+g(void *x)
 {
     int i = 36;
     unsigned long long int ret = 0;
@@ -186,7 +186,7 @@ g(lthread_t *lt, void *x)
 }
 
 void
-h(lthread_t *lt, void *x)
+h(void *x)
 {
     int i = 45;
     unsigned long long int ret = 0;

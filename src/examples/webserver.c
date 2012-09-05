@@ -26,7 +26,7 @@ fibonacci(unsigned long long int n)
 }
 
 void
-http_serv(lthread_t *lt, void *arg)
+http_serv(void *arg)
 {
     cli_info_t *cli_info = arg;
     char *buf = NULL;

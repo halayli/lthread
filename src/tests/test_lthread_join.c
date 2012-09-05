@@ -3,11 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void a(lthread_t *lt, void *x);
-void b(lthread_t *lt, void *x);
+void a(void *x);
+void b(void *x);
 
 void
-b(lthread_t *lt, void *x)
+b(void *x)
 {
     DEFINE_LTHREAD;
     void *buf = malloc(100);
@@ -21,7 +21,7 @@ b(lthread_t *lt, void *x)
 
 void *ptr = NULL;
 void
-a(lthread_t *lt ,void *x)
+a(void *x)
 {
 	lthread_t *lt_new = NULL;
 

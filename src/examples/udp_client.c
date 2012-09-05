@@ -10,7 +10,7 @@
 #include <lthread.h>
 
 void
-udp_client(lthread_t *lt, void *args)
+udp_client(void *args)
 {
     struct sockaddr_in dest;
     socklen_t dest_len = sizeof(dest);

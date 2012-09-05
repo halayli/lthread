@@ -46,7 +46,7 @@ Library calls
  * Creates a new lthread and returns it via `*new_lt`.
  * Returns 0 if success, -1 on failure.
  */
-int lthread_create(lthread_t **new_lt, void *fun, void *arg);
+int lthread_create(lthread_t **new_lt, void (*lthread_func)(void *), void *arg);
 ```
 
 ```C
@@ -364,7 +364,7 @@ Examples
 #include <sys/time.h>
 
 void
-a(lthread_t *lt, void *x)
+a(void *x)
 {
     int i = 3;
     DEFINE_LTHREAD;
@@ -383,7 +383,7 @@ a(lthread_t *lt, void *x)
 }
 
 void
-b(lthread_t *lt, void *x)
+b(void *x)
 {
     int i = 8;
     DEFINE_LTHREAD;
@@ -402,7 +402,7 @@ b(lthread_t *lt, void *x)
 }
 
 void
-c(lthread_t *lt, void *x)
+c(void *x)
 {
     DEFINE_LTHREAD;
 	printf("c is running\n");
@@ -413,7 +413,7 @@ c(lthread_t *lt, void *x)
 }
 
 void
-d(lthread_t *lt ,void *x)
+d(void *x)
 {
 	lthread_t *lt_new = NULL;
 
@@ -527,7 +527,7 @@ http_serv(lthread_t *lt, void *arg)
 }
 
 void
-listener(lthread_t *lt, void *arg)
+listener(void *arg)
 {
     int cli_fd = 0;
     int lsn_fd = 0;

@@ -2,12 +2,12 @@
 #include <sys/time.h>
 #include <stdio.h>
 
-void a(lthread_t *lt, void *x);
-void b(lthread_t *lt, void *x);
-void c(lthread_t *lt, void *x);
+void a(void *x);
+void b(void *x);
+void c(void *x);
 
 void
-b(lthread_t *lt, void *x)
+b(void *x)
 {
 	int i = 5;
 	struct timeval t1 = {0, 0};
@@ -25,7 +25,7 @@ b(lthread_t *lt, void *x)
 }
 
 void
-c(lthread_t *lt, void *x)
+c(void *x)
 {
 	int i = 4;
     lthread_t *lt_new = NULL;
@@ -45,7 +45,7 @@ c(lthread_t *lt, void *x)
 }
 
 void
-a(lthread_t *lt ,void *x)
+a(void *x)
 {
 	int i = 3;
 	lthread_t *lt_new = NULL;

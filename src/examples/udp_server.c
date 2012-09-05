@@ -10,7 +10,7 @@
 #include <lthread.h>
 
 void
-udp_server(lthread_t *lt, void *args)
+udp_server(void *args)
 {
     struct sockaddr_in listener;
     struct sockaddr_in client;
