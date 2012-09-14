@@ -33,7 +33,9 @@
 inline void
 register_rd_interest(int fd)
 {
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
+    if (sched->nevents == sched->changelist_size)
+        _sched_grow_eventlist();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_READ,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
     if (sched->current_lthread)
@@ -43,28 +45,40 @@ register_rd_interest(int fd)
 inline void
 register_wr_interest(int fd)
 {
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
+    if (sched->nevents == sched->changelist_size)
+        _sched_grow_eventlist();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_WRITE,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
     sched->current_lthread->state |= bit(LT_WAIT_WRITE);
 }
 
 inline void
-clear_interest(int fd)
+clear_rd_interest(int fd)
 {
     struct kevent change;
     struct kevent event;
     struct timespec tm = {0, 0};
     int ret = 0;
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
 
-    //printf("sched is %p and fd is %d\n", sched, fd);
-    /*EV_SET(&sched->changelist[sched->nevents++],
-        fd, 0, EV_DELETE, 0, 0, NULL);*/
-    EV_SET(&change, fd, EVFILT_READ|EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
-    ret = kevent(sched->poller, &change, 1, &event, 0, &tm);
-    //assert(ret == 0);
+    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+    ret = kevent(sched->poller_fd, &change, 1, &event, 0, &tm);
+    assert(ret == 1);
+}
 
+inline void
+clear_wr_interest(int fd)
+{
+    struct kevent change;
+    struct kevent event;
+    struct timespec tm = {0, 0};
+    int ret = 0;
+    struct lthread_sched *sched = lthread_get_sched();
+
+    EV_SET(&change, fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
+    ret = kevent(sched->poller_fd, &change, 1, &event, 0, &tm);
+    assert(ret == 1);
 }
 
 int
@@ -76,8 +90,8 @@ create_poller(void)
 inline int
 poll_events(struct timespec t)
 {
-    sched_t *sched = lthread_get_sched();
-    return kevent(sched->poller, sched->changelist, sched->nevents,
+    struct lthread_sched *sched = lthread_get_sched();
+    return kevent(sched->poller_fd, sched->changelist, sched->nevents,
         sched->eventlist, LT_MAX_EVENTS, &t);
 }
 
@@ -93,14 +107,20 @@ get_event(struct kevent *ev)
     return ev->filter;
 }
 
-inline void *
-get_data(struct kevent *ev)
-{
-    return ev->udata;
-}
-
 inline int
 is_eof(struct kevent *ev)
 {
     return ev->flags & EV_EOF;
+}
+
+inline int
+is_write(struct kevent *ev)
+{
+    return ev->filter & EVFILT_WRITE;
+}
+
+inline int
+is_read(struct kevent *ev)
+{
+    return ev->filter & EVFILT_READ;
 }

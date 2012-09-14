@@ -38,14 +38,13 @@
 #include <pthread.h>
 
 #include "time_utils.h"
-#include "rbtree.h"
 #include "lthread_int.h"
 #include "poller.h"
 
 extern int errno;
 
 static void _exec(void *lt);
-static void _lthread_init(lthread_t *lt);
+static void _lthread_init(struct lthread *lt);
 static void _lthread_key_create(void);
 
 pthread_key_t lthread_sched_key;
@@ -53,7 +52,7 @@ static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
 
 
-int _switch(struct _cpu_state *new_state, struct _cpu_state *cur_state);
+int _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
 #ifdef __i386__
 __asm__ (
 "    .text                                  \n"
@@ -117,34 +116,35 @@ _exec(void *lt)
 #if defined(__llvm__) && defined(__x86_64__)
   __asm__ ("movq 16(%%rbp), %[lt]" : [lt] "=r" (lt));
 #endif
-    ((lthread_t *)lt)->fun(((lthread_t *)lt)->arg);
-    ((lthread_t *)lt)->state |= bit(LT_EXITED);
+    ((struct lthread *)lt)->fun(((struct lthread *)lt)->arg);
+    ((struct lthread *)lt)->state |= bit(LT_EXITED);
 
     _lthread_yield(lt);
 }
 
 void
-_lthread_yield(lthread_t *lt) 
+_lthread_yield(struct lthread *lt)
 {
     lt->ops = 0;
-    _switch(&lt->sched->st, &lt->st);
+    _switch(&lt->sched->ctx, &lt->ctx);
 }
 
 void
-_lthread_free(lthread_t *lt)
+_lthread_free(struct lthread *lt)
 {
     free(lt->stack);
     free(lt);
 }
 
 int
-_lthread_resume(lthread_t *lt)
+_lthread_resume(struct lthread *lt)
 {
     if (lt->state & bit(LT_CANCELLED)) {
         /* if an lthread was joining on it, schedule it to run */
         if (lt->lt_join) {
             _desched_lthread(lt->lt_join);
-            TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt->lt_join, new_next);
+            TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt->lt_join,
+                ready_next);
             lt->lt_join = NULL;
         }
         /* if lthread is detached, then we can free it up */
@@ -159,14 +159,15 @@ _lthread_resume(lthread_t *lt)
     _restore_exec_state(lt);
 
     lthread_get_sched()->current_lthread = lt;
-    _switch(&lt->st, &lt->sched->st);
+    _switch(&lt->ctx, &lt->sched->ctx);
     lthread_get_sched()->current_lthread = NULL;
 
     if (lt->state & bit(LT_EXITED)) {
         if (lt->lt_join) {
             /* if lthread was sleeping, deschedule it so it doesn't expire. */
             _desched_lthread(lt->lt_join);
-            TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt->lt_join, new_next);
+            TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt->lt_join,
+                ready_next);
             lt->lt_join = NULL;
         }
 
@@ -179,7 +180,6 @@ _lthread_resume(lthread_t *lt)
         /* place it in a compute scheduler if needed. */
         if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
             _lthread_compute_add(lt);
-            lthread_get_sched()->sleeping_state++;
         }
     }
 
@@ -212,36 +212,36 @@ lthread_init(size_t size)
 }
 
 static void
-_lthread_init(lthread_t *lt)
+_lthread_init(struct lthread *lt)
 {
     void **stack = NULL;
     stack = (void **)(lt->sched->stack + (lt->sched->stack_size));
 
     stack[-3] = NULL;
     stack[-2] = (void *)lt;
-    lt->st.esp = (void *)stack - (4 * sizeof(void *));
-    lt->st.ebp = (void *)stack - (3 * sizeof(void *));
-    lt->st.eip = (void *)_exec;
+    lt->ctx.esp = (void *)stack - (4 * sizeof(void *));
+    lt->ctx.ebp = (void *)stack - (3 * sizeof(void *));
+    lt->ctx.eip = (void *)_exec;
     lt->state = bit(LT_READY);
 }
 
 inline int
-_restore_exec_state(lthread_t *lt)
+_restore_exec_state(struct lthread *lt)
 {
     if (lt->stack_size)
-        memcpy(lt->st.esp, lt->stack, lt->stack_size);
+        memcpy(lt->ctx.esp, lt->stack, lt->stack_size);
 
     return 0;
 }
 
 int
-_save_exec_state(lthread_t *lt)
+_save_exec_state(struct lthread *lt)
 {
     void *stack_top = NULL;
     size_t size = 0;
 
     stack_top = lt->sched->stack + lt->sched->stack_size;
-    size = stack_top - lt->st.esp;
+    size = stack_top - lt->ctx.esp;
 
     if (size && lt->stack_size != size) {
         if (lt->stack)
@@ -254,13 +254,13 @@ _save_exec_state(lthread_t *lt)
 
     lt->stack_size = size;
     if (size)
-        memcpy(lt->stack, lt->st.esp, size);
+        memcpy(lt->stack, lt->ctx.esp, size);
 
     return 0;
 }
 
 void
-_sched_free(sched_t *sched)
+_sched_free(struct lthread_sched *sched)
 {
     free(sched->stack);
     pthread_mutex_destroy(&sched->compute_mutex);
@@ -271,12 +271,12 @@ _sched_free(sched_t *sched)
 int
 sched_create(size_t stack_size)
 {
-    sched_t *new_sched;
+    struct lthread_sched *new_sched;
     size_t sched_stack_size = 0;
 
     sched_stack_size = stack_size ? stack_size : MAX_STACK_SIZE;
-    
-    if ((new_sched = calloc(1, sizeof(sched_t))) == NULL) {
+
+    if ((new_sched = calloc(1, sizeof(struct lthread_sched))) == NULL) {
         perror("Failed to initialize scheduler\n");
         return errno;
     }
@@ -291,7 +291,7 @@ sched_create(size_t stack_size)
 
     bzero(new_sched->stack, sched_stack_size);
 
-    if ((new_sched->poller = create_poller()) == -1) {
+    if ((new_sched->poller_fd = create_poller()) == -1) {
         perror("Failed to initialize poller\n");
         _sched_free(new_sched);
         return errno;
@@ -301,7 +301,7 @@ sched_create(size_t stack_size)
         perror("Failed to initialize compute_mutex\n");
         _sched_free(new_sched);
         return errno;
-    } 
+    }
 
     if (pipe(new_sched->compute_pipes) == -1) {
         perror("Failed to initialize pipe\n");
@@ -311,25 +311,44 @@ sched_create(size_t stack_size)
 
     new_sched->stack_size = sched_stack_size;
 
-    new_sched->total_lthreads = 0;
+    new_sched->spawned_lthreads = 0;
     new_sched->default_timeout = 3000000u;
-    new_sched->waiting_state = 0;
-    new_sched->sleeping_state = 0;
-    new_sched->sleeping = RB_ROOT;
+    RB_INIT(&new_sched->sleeping);
+    RB_INIT(&new_sched->waiting);
     new_sched->birth = rdtsc();
-    TAILQ_INIT(&new_sched->new);
+    TAILQ_INIT(&new_sched->ready);
 
-    bzero(&new_sched->st, sizeof(struct _cpu_state));
+    bzero(&new_sched->ctx, sizeof(struct cpu_ctx));
+
+    if ((new_sched->changelist =
+        calloc(1024, sizeof(POLL_EVENT_TYPE))) == NULL) {
+        _sched_free(new_sched);
+        return errno;
+    }
+
+    new_sched->changelist_size = 1024;
 
     return 0;
 }
 
-int
-lthread_create(lthread_t **new_lt, void *fun, void *arg)
+void
+_sched_grow_eventlist(void)
 {
-    lthread_t *lt = NULL;
+    POLL_EVENT_TYPE *tmp = NULL;
+    struct lthread_sched *sched = lthread_get_sched();
+
+    sched->changelist_size += 1024;
+    tmp = realloc(sched->changelist, sched->changelist_size);
+    assert(tmp != NULL);
+    sched->changelist = tmp;
+}
+
+int
+lthread_create(struct lthread **new_lt, void *fun, void *arg)
+{
+    struct lthread *lt = NULL;
     pthread_once(&key_once, _lthread_key_create);
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
 
     if (sched == NULL) {
         sched_create(0);
@@ -340,7 +359,7 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
         }
     }
 
-    if ((lt = calloc(1, sizeof(lthread_t))) == NULL) {
+    if ((lt = calloc(1, sizeof(struct lthread))) == NULL) {
         perror("Failed to allocate memory for new lthread");
         return errno;
     }
@@ -348,14 +367,13 @@ lthread_create(lthread_t **new_lt, void *fun, void *arg)
     lt->sched = sched;
     lt->stack_size = 0;
     lt->state = bit(LT_NEW);
-    lt->id = sched->total_lthreads++;
+    lt->id = sched->spawned_lthreads++;
     lt->fun = fun;
     lt->fd_wait = -1;
     lt->arg = arg;
     lt->birth = rdtsc();
-    lt->timeout = -1;
     *new_lt = lt;
-    TAILQ_INSERT_TAIL(&lt->sched->new, lt, new_next);
+    TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 
     return 0;
 }
@@ -372,20 +390,20 @@ lthread_get_data(void)
     return lthread_get_sched()->current_lthread->data;
 }
 
-lthread_t *
+struct lthread*
 lthread_current(void)
 {
     return lthread_get_sched()->current_lthread;
 }
 
 void
-lthread_cancel(lthread_t *lt)
+lthread_cancel(struct lthread *lt)
 {
     if (lt == NULL)
         return;
 
     lt->state |= bit(LT_CANCELLED);
-    /* 
+    /*
      * we don't schedule the cancelled lthread if it was running in a compute
      * scheduler or pending to run in a compute scheduler. otherwise it could
      * get freed while it's still running.
@@ -393,13 +411,13 @@ lthread_cancel(lthread_t *lt)
     if (lt->state & bit(LT_PENDING_RUNCOMPUTE) ||
         lt->state & bit(LT_RUNCOMPUTE))
         return;
-    TAILQ_INSERT_TAIL(&lt->sched->new, lt, new_next);
+    TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 }
 
 int
-lthread_cond_create(lthread_cond_t **c)
+lthread_cond_create(struct lthread_cond **c)
 {
-    if ((*c = calloc(1, sizeof(lthread_cond_t))) == NULL)
+    if ((*c = calloc(1, sizeof(struct lthread_cond))) == NULL)
         return -1;
 
     TAILQ_INIT(&(*c)->blocked_lthreads);
@@ -408,9 +426,9 @@ lthread_cond_create(lthread_cond_t **c)
 }
 
 int
-lthread_cond_wait(lthread_cond_t *c, uint64_t timeout)
+lthread_cond_wait(struct lthread_cond *c, uint64_t timeout)
 {
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
     TAILQ_INSERT_TAIL(&c->blocked_lthreads, lt, cond_next);
     if (timeout)
         _sched_lthread(lt, timeout);
@@ -430,37 +448,35 @@ lthread_cond_wait(lthread_cond_t *c, uint64_t timeout)
 }
 
 void
-lthread_cond_signal(lthread_cond_t *c)
+lthread_cond_signal(struct lthread_cond *c)
 {
-    lthread_t *lt = TAILQ_FIRST(&c->blocked_lthreads);
+    struct lthread *lt = TAILQ_FIRST(&c->blocked_lthreads);
     if (lt == NULL)
         return;
     TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
     _desched_lthread(lt);
-    TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt, new_next);
+    TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
 }
 
 void
-lthread_cond_broadcast(lthread_cond_t *c)
+lthread_cond_broadcast(struct lthread_cond *c)
 {
-    lthread_t *lt = NULL;
-    lthread_t *lttmp = NULL;
+    struct lthread *lt = NULL;
+    struct lthread *lttmp = NULL;
 
     TAILQ_FOREACH_SAFE(lt, &c->blocked_lthreads, cond_next, lttmp) {
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
         _desched_lthread(lt);
-        TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt, new_next);
+        TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
     }
 }
 
 void
 lthread_sleep(uint64_t msecs)
 {
-    lthread_t *lt = lthread_get_sched()->current_lthread;
-    lt->timeout = msecs;
-    lt->ticks = rdtsc();
+    struct lthread *lt = lthread_get_sched()->current_lthread;
     lt->fd_wait = -1;
-    if (_sched_lthread(lt, lt->timeout) == -1) {
+    if (_sched_lthread(lt, msecs) == -1) {
         lt->state = bit(LT_READY);
         return;
     }
@@ -469,21 +485,33 @@ lthread_sleep(uint64_t msecs)
 }
 
 inline void
-_lthread_renice(lthread_t *lt)
+_lthread_renice(struct lthread *lt)
 {
     lt->ops++;
     if (lt->ops < 5)
         return;
 
-    TAILQ_INSERT_TAIL(&lthread_get_sched()->new, lt, new_next);
+    TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
     _lthread_yield(lt);
 }
 
+inline uint64_t
+_lthread_sleep_cmp(struct lthread *l1, struct lthread *l2)
+{
+    return (l2->sleep_usecs - l1->sleep_usecs);
+}
 
-void lthread_wakeup(lthread_t *lt)
+inline uint64_t
+_lthread_wait_cmp(struct lthread *l1, struct lthread *l2)
+{
+    return (l2->fd_key - l1->fd_key);
+}
+
+void
+lthread_wakeup(struct lthread *lt)
 {
     if (lt->state & bit(LT_SLEEPING)) {
-        TAILQ_INSERT_TAIL(&lt->sched->new, lt, new_next);
+        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
         _desched_lthread(lt);
     }
 }
@@ -491,7 +519,7 @@ void lthread_wakeup(lthread_t *lt)
 void
 lthread_exit(void *ptr)
 {
-    lthread_t *current = lthread_get_sched()->current_lthread; 
+    struct lthread *current = lthread_get_sched()->current_lthread;
     if (current->lt_join && current->lt_join->lt_exit_ptr && ptr)
         *(current->lt_join->lt_exit_ptr) = ptr;
 
@@ -500,16 +528,16 @@ lthread_exit(void *ptr)
 }
 
 int
-lthread_join(lthread_t *lt, void **ptr, uint64_t timeout)
+lthread_join(struct lthread *lt, void **ptr, uint64_t timeout)
 {
-    lthread_t *current = lthread_get_sched()->current_lthread; 
+    struct lthread *current = lthread_get_sched()->current_lthread;
     lt->lt_join = current;
     current->lt_exit_ptr = ptr;
     int ret = 0;
 
     /* abort if the lthread has exited already */
     if (lt->state & bit(LT_EXITED))
-        abort();
+        return -1;
 
     if (timeout)
         _sched_lthread(current, timeout);
@@ -532,26 +560,14 @@ lthread_join(lthread_t *lt, void **ptr, uint64_t timeout)
 inline void
 lthread_detach(void)
 {
-    lthread_t *current = lthread_get_sched()->current_lthread; 
-    current->state |= bit(LT_DETACH); 
-}
-
-int
-lthread_running()
-{
-    return lthread_get_sched()->waiting_state;
-}
-
-int
-lthread_sleeping()
-{
-    return lthread_get_sched()->sleeping_state;
+    struct lthread *current = lthread_get_sched()->current_lthread;
+    current->state |= bit(LT_DETACH);
 }
 
 void
 lthread_set_funcname(const char *f)
 {
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
     strncpy(lt->funcname, f, 64);
 }
 

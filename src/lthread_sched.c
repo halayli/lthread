@@ -33,73 +33,29 @@
 #include <unistd.h>
 #include <assert.h>
 #include <pthread.h>
+#include <errno.h>
 #include <inttypes.h>
 
 #include "lthread_int.h"
 #include "time_utils.h"
-#include "rbtree.h"
+#include "tree.h"
 
-static uint64_t _min_timeout(sched_t *);
+RB_GENERATE_STATIC(lthread_rb_sleep, lthread, sleep_node, _lthread_sleep_cmp);
+RB_GENERATE(lthread_rb_wait, lthread, wait_node, _lthread_wait_cmp);
+static uint64_t _min_timeout(struct lthread_sched *);
 
 static int  _lthread_poll(void);
-static void _resume_expired_lthreads(sched_t *sched);
-
-extern int errno;
-
-static sched_node_t*
-_rb_search(struct rb_root *root, uint64_t usecs)
-{
-    struct rb_node *node = root->rb_node;
-    sched_node_t *data = NULL;
-
-    while (node) {
-        data = container_of(node, sched_node_t, node);
-
-        if (usecs < data->usecs)
-            node = node->rb_left;
-        else if (usecs > data->usecs)
-            node = node->rb_right;
-        else {
-            return data;
-        }
-    }
-
-    return NULL;
-}
-
-static int
-_rb_insert(struct rb_root *root, sched_node_t *data)
-{
-    sched_node_t *this = NULL;
-    struct rb_node **new = &(root->rb_node), *parent = NULL;
-
-    while (*new)
-    {
-        parent = *new;
-        this = container_of(parent, sched_node_t, node);
-
-        if (this->usecs > data->usecs)
-            new = &((*new)->rb_left);
-        else if (this->usecs < data->usecs)
-            new = &((*new)->rb_right);
-        else {
-            assert(0);
-            return -1;
-        }
-    }
-
-    rb_link_node(&data->node, parent, new);
-    rb_insert_color(&data->node, root);
-
-    return 0;
-}
+static void _resume_expired_lthreads(struct lthread_sched *sched);
 
 static char tmp[100];
+static struct lthread find_lt;
+
 void
 lthread_run(void)
 {
-    sched_t *sched;
-    lthread_t *lt = NULL, *lttmp = NULL;
+    struct lthread_sched *sched;
+    struct lthread *lt = NULL, *lt_tmp = NULL;
+    struct lthread *lt_read = NULL, *lt_write = NULL;
     int p = 0;
     int fd = 0;
     int ret = 0;
@@ -110,17 +66,17 @@ lthread_run(void)
     if (sched == NULL)
         return;
 
-    while (sched->sleeping_state ||
-        !TAILQ_EMPTY(&sched->new) ||
-        sched->waiting_state) {
+    while (!RB_EMPTY(&sched->sleeping) ||
+        !RB_EMPTY(&sched->waiting) ||
+        !TAILQ_EMPTY(&sched->ready)) {
 
         /* 1. start by checking if a sleeping thread needs to wakeup */
         _resume_expired_lthreads(sched);
 
-        /* 2. check to see if we have any new threads to run */
-        while (!TAILQ_EMPTY(&sched->new)) {
-            TAILQ_FOREACH_SAFE(lt, &sched->new, new_next, lttmp) {
-                TAILQ_REMOVE(&lt->sched->new, lt, new_next);
+        /* 2. check to see if we have any ready threads to run */
+        while (!TAILQ_EMPTY(&sched->ready)) {
+            TAILQ_FOREACH_SAFE(lt, &sched->ready, ready_next, lt_tmp) {
+                TAILQ_REMOVE(&lt->sched->ready, lt, ready_next);
                 _lthread_resume(lt);
             }
         }
@@ -135,7 +91,6 @@ lthread_run(void)
             }
             LIST_REMOVE(lt, compute_sched_next);
             pthread_mutex_unlock(&sched->compute_mutex);
-            sched->sleeping_state--;
             _lthread_resume(lt);
         }
 
@@ -144,29 +99,40 @@ lthread_run(void)
         _lthread_poll();
 
         /* 5. fire up lthreads that are ready to run */
-        while (sched->total_new_events) {
-            p = --sched->total_new_events;
+        while (sched->num_new_events) {
+            p = --sched->num_new_events;
 
             /* We got signaled via pipe to wakeup from polling & rusume compute.
              * Those lthreads will get handled in step 3.
-             */ 
+             */
             fd = get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
                 ret = read(fd, &tmp, sizeof(tmp));
                 continue;
             }
 
-            lt = (lthread_t *)get_data(&sched->eventlist[p]);
-            if (lt == NULL)
-                assert(0);
-
             if (is_eof(&sched->eventlist[p])) {
                 lt->state |= bit(LT_FDEOF);
                 errno = ECONNRESET;
             }
 
-            _desched_lthread(lt);
-            _lthread_resume(lt);
+            find_lt.fd_key = fd << 8 | LT_READ;
+            lt_read = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
+            if (lt_read != NULL) {
+                RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt_read);
+                _desched_lthread(lt_read);
+                _lthread_resume(lt_read);
+            }
+
+            find_lt.fd_key = fd << 8 | LT_WRITE;
+            lt_write = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
+            if (lt_write != NULL) {
+                RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt_write);
+                _desched_lthread(lt_write);
+                _lthread_resume(lt_write);
+            }
+
+            assert(lt_write != NULL || lt_read != NULL);
         }
     }
 
@@ -176,14 +142,13 @@ lthread_run(void)
 }
 
 void
-_lthread_wait_for(lthread_t *lt, int fd, lt_event_t e)
+_lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e)
 {
-
-    
     //printf("registering lt %llu for %d\n", lt->id, e);
+    struct lthread *lt_tmp = NULL;
     if (lt->state & bit(LT_WAIT_READ) ||
         lt->state & bit(LT_WAIT_WRITE)) {
-        printf("Unexpected event. lt id %"PRIu64" fd %d is already in %d state\n",
+        printf("Unexpected event. lt id %"PRIu64" fd %d already in %d state\n",
             lt->id, lt->fd_wait, lt->state);
         assert(0);
     }
@@ -195,15 +160,15 @@ _lthread_wait_for(lthread_t *lt, int fd, lt_event_t e)
     else
         assert(0);
 
-    lthread_get_sched()->waiting_state++;
-    lt->fd_wait = fd;
-
+    lt->fd_key = (fd << 8) | e;
+    lt_tmp = RB_INSERT(lthread_rb_wait, &lt->sched->waiting, lt);
+    assert(lt_tmp == NULL);
     _lthread_yield(lt);
     clear_rd_wr_state(lt);
 }
 
 void
-clear_rd_wr_state(lthread_t *lt)
+clear_rd_wr_state(struct lthread *lt)
 {
     if (lt->fd_wait >= 0) {
         //printf("%llu state is %d\n", lt->id, lt->state);
@@ -216,7 +181,6 @@ clear_rd_wr_state(lthread_t *lt)
             assert(0);
         }
 
-        lt->sched->waiting_state--;
         lt->fd_wait = -1;
     }
 }
@@ -224,28 +188,23 @@ clear_rd_wr_state(lthread_t *lt)
 static int
 _lthread_poll(void)
 {
-    sched_t *sched;
+    struct lthread_sched *sched;
     struct timespec t = {0, 0};
     int ret = 0;
     uint64_t usecs = 0;
 
     sched = lthread_get_sched();
 
-    sched->total_new_events = 0;
+    sched->num_new_events = 0;
     usecs = _min_timeout(sched);
 
     /* never sleep if we have an lthread pending in the new queue */
-    if (usecs && TAILQ_EMPTY(&sched->new)) {
+    if (usecs && TAILQ_EMPTY(&sched->ready)) {
         t.tv_sec =  usecs / 1000000u;
         if (t.tv_sec != 0)
             t.tv_nsec  =  (usecs % 1000u)  * 1000000u;
         else
             t.tv_nsec = usecs * 1000u;
-    }
-
-    if (sched->nevents > MAX_CHANGELIST) {
-        printf("too many events, %d\n", sched->nevents);
-        assert(0);
     }
 
     ret = poll_events(t);
@@ -256,23 +215,18 @@ _lthread_poll(void)
     }
 
     sched->nevents = 0;
-    sched->total_new_events = ret;
+    sched->num_new_events = ret;
 
     return 0;
 }
 
 void
-_desched_lthread(lthread_t *lt)
+_desched_lthread(struct lthread *lt)
 {
+    struct lthread *lt_tmp = NULL;
+
     if (lt->state & bit(LT_SLEEPING)) {
-        LIST_REMOVE(lt, sleep_next);
-        lt->sched->sleeping_state--;
-        /* del if lt is the last sleeping thread in the node */
-        if (LIST_EMPTY(lt->sleep_list)) {
-            rb_erase(&lt->sched_node->node, &lt->sched->sleeping);
-            free(lt->sched_node);
-            lt->sched_node = NULL;
-        }
+        RB_REMOVE(lthread_rb_sleep, &lt->sched->sleeping, lt_tmp);
         lt->state &= clearbit(LT_SLEEPING);
         lt->state |= bit(LT_READY);
         lt->state &= clearbit(LT_EXPIRED);
@@ -280,117 +234,76 @@ _desched_lthread(lthread_t *lt)
 }
 
 int
-_sched_lthread(lthread_t *lt,  uint64_t msecs)
+_sched_lthread(struct lthread *lt, uint64_t msecs)
 {
-    sched_node_t *tmp = NULL;
+    struct lthread *lt_tmp = NULL;
     uint64_t t_diff_usecs = 0;
-    int ret = 0;
     uint64_t usecs = msecs * 1000u;
     t_diff_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
 
-    tmp = _rb_search(&lt->sched->sleeping, t_diff_usecs);
-    if (tmp == NULL &&
-        (tmp = calloc(1, sizeof(sched_node_t))) != NULL) {
-        tmp->usecs = t_diff_usecs;
-        ret = _rb_insert(&lt->sched->sleeping, tmp);
-        if (ret == -1) {
-            printf("Failed to insert node in rbtree!\n");
-            assert(0);
-            free(tmp);
-            return -1;
+    while (1) {
+        /* resolve collision by adding usec until we find a non-existant node */
+        lt->sleep_usecs = t_diff_usecs;
+        lt_tmp = RB_INSERT(lthread_rb_sleep, &lt->sched->sleeping, lt);
+        if (lt_tmp) {
+            t_diff_usecs++;
+            continue;
         }
-        LIST_INIT(&tmp->lthreads);
-        LIST_INSERT_HEAD(&tmp->lthreads, lt, sleep_next);
-        lt->sleep_list = &tmp->lthreads;
-        lt->sched_node = tmp;
-        lt->sched->sleeping_state++;
         lt->state |= bit(LT_SLEEPING);
-        return 0;
+        break;
     }
-    if (tmp) {
-        LIST_INSERT_HEAD(&tmp->lthreads, lt, sleep_next);
-        lt->sched_node = tmp;
-        lt->sleep_list = &tmp->lthreads;
-        lt->sched->sleeping_state++;
-        lt->state |= bit(LT_SLEEPING);
-        return 0;
-    } else {
-        printf("impossible!\n");
-        assert(0);
-        return -1;
-    }
+
+    return 0;
 }
 
 static uint64_t
-_min_timeout(sched_t *sched)
+_min_timeout(struct lthread_sched *sched)
 {
-    struct rb_node *node = sched->sleeping.rb_node;
-    sched_node_t *data = NULL;
     uint64_t t_diff_usecs = 0, min = 0;
-    int in = 0;
+    struct lthread *lt = NULL;
 
     t_diff_usecs = tick_diff_usecs(sched->birth, rdtsc());
     min = sched->default_timeout;
 
-    while (node) {
-        data = container_of(node, sched_node_t, node);
-        min = data->usecs;
-        node = node->rb_left;
-        in = 1;
-    }
+    lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);
+    if (!lt)
+        return min;
 
-    if (!in)
-        return min; 
-
+    min = lt->sleep_usecs;
     if (min > t_diff_usecs)
         return (min - t_diff_usecs);
-    else /* we are running late on a thread, execute immediately */
+    else // we are running late on a thread, execute immediately
         return 0;
 
     return 0;
 }
 
 static void
-_resume_expired_lthreads(sched_t *sched)
+_resume_expired_lthreads(struct lthread_sched *sched)
 {
-    lthread_t *lt = NULL, *lttmp = NULL;
-    struct rb_node *node = sched->sleeping.rb_node;
-    sched_node_t *data = NULL;
+    struct lthread *lt = NULL;
+    struct lthread *lt_tmp = NULL;
     uint64_t t_diff_usecs = 0;
-    _sched_node_l_t sched_list;
-    LIST_INIT(&sched_list);
 
     /* current scheduler time */
     t_diff_usecs = tick_diff_usecs(sched->birth, rdtsc());
 
-    while (node) {
-        data = container_of(node, sched_node_t, node);
-        node = node->rb_left;
-
-        if (data->usecs <= t_diff_usecs) {
-            LIST_INSERT_HEAD(&sched_list, data, next);
-            LIST_FOREACH_SAFE(lt, &data->lthreads, sleep_next, lttmp) {
-                LIST_REMOVE(lt, sleep_next);
-                lt->sched->sleeping_state--;
-                lt->state |= bit(LT_EXPIRED);
-                lt->sleep_list = NULL;
-                lt->sched_node = NULL;
-                lt->state &= clearbit(LT_SLEEPING);
-                if (lt->fd_wait > 0)
-                    clear_interest(lt->fd_wait);
-
-                if (_lthread_resume(lt) != -1)
-                    lt->state &= clearbit(LT_EXPIRED);
+    RB_FOREACH_SAFE(lt, lthread_rb_sleep, &sched->sleeping, lt_tmp) {
+        if (lt->sleep_usecs <= t_diff_usecs) {
+            RB_REMOVE(lthread_rb_sleep, &sched->sleeping, lt);
+            lt->state &= clearbit(LT_SLEEPING);
+            if (lt->fd_wait >= 0) {
+                if (lt->fd_event == LT_WRITE)
+                    clear_wr_interest(lt->fd_wait);
+                else
+                    clear_rd_interest(lt->fd_wait);
+                RB_REMOVE(lthread_rb_wait, &sched->waiting, lt);
             }
-        } 
-    }
+            if (_lthread_resume(lt) != -1)
+                lt->state &= clearbit(LT_EXPIRED);
+            continue;
+        }
 
-    data = NULL;
-    while (!LIST_EMPTY(&sched_list)) {
-        data = LIST_FIRST(&sched_list);
-        rb_erase(&data->node, &sched->sleeping);
-        LIST_REMOVE(data, next);
-        free(data);
+        break;
     }
-
 }

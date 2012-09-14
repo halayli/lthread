@@ -50,7 +50,7 @@
 #define LTHREAD_RECV(x, y)                                  \
 x {                                                         \
     ssize_t ret = 0;                                        \
-    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+    struct lthread *lt = lthread_get_sched()->current_lthread;   \
     while (1) {                                             \
         if (lt->state & bit(LT_FDEOF))                      \
             return -1;                                      \
@@ -74,7 +74,7 @@ x {                                                         \
 x {                                                         \
     ssize_t ret = 0;                                        \
     ssize_t recvd = 0;                                      \
-    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+    struct lthread *lt = lthread_get_sched()->current_lthread;   \
                                                             \
     while (recvd != length) {                               \
         if (lt->state & bit(LT_FDEOF))                      \
@@ -104,7 +104,7 @@ x {                                                         \
 x {                                                         \
     ssize_t ret = 0;                                        \
     ssize_t sent = 0;                                       \
-    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+    struct lthread *lt = lthread_get_sched()->current_lthread;   \
     while (sent != length) {                                \
         if (lt->state & bit(LT_FDEOF))                      \
             return -1;                                      \
@@ -125,7 +125,7 @@ x {                                                         \
 #define LTHREAD_SEND_ONCE(x, y)                             \
 x {                                                         \
     ssize_t ret = 0;                                        \
-    lthread_t *lt = lthread_get_sched()->current_lthread;   \
+    struct lthread *lt = lthread_get_sched()->current_lthread;   \
     while (1) {                                             \
         if (lt->state & bit(LT_FDEOF))                      \
             return -1;                                      \
@@ -145,7 +145,7 @@ int
 lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
 {
     int ret = -1;
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
 
     while (1) {
         _lthread_renice(lt);
@@ -187,7 +187,7 @@ lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
 int
 lthread_close(int fd)
 {
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
     
     close(fd);
     _desched_lthread(lt);
@@ -227,7 +227,8 @@ lthread_socket(int domain, int type, int protocol)
 }
 
 /* forward declare lthread_recv for use in readline */
-ssize_t lthread_recv(int fd, void *buf, size_t buf_len, int flags, uint64_t timeout);
+ssize_t lthread_recv(int fd, void *buf, size_t buf_len, int flags,
+    uint64_t timeout);
 
 ssize_t
 lthread_readline(int fd, char **buf, size_t max, uint64_t timeout)
@@ -285,7 +286,8 @@ err:
 }
 
 LTHREAD_RECV(
-    ssize_t lthread_recv(int fd, void *buf, size_t length, int flags, uint64_t timeout),
+    ssize_t lthread_recv(int fd, void *buf, size_t length, int flags,
+        uint64_t timeout),
     recv(fd, buf, length, flags FLAG)
 )
 
@@ -295,17 +297,20 @@ LTHREAD_RECV(
 )
 
 LTHREAD_RECV_EXACT(
-        ssize_t lthread_recv_exact(int fd, void *buf, size_t length, int flags, uint64_t timeout),
-        recv(fd, buf + recvd, length - recvd, flags FLAG)
+    ssize_t lthread_recv_exact(int fd, void *buf, size_t length, int flags,
+        uint64_t timeout),
+    recv(fd, buf + recvd, length - recvd, flags FLAG)
 )
 
 LTHREAD_RECV_EXACT(
-        ssize_t lthread_read_exact(int fd, void *buf, size_t length, uint64_t timeout),
-        read(fd, buf + recvd, length - recvd)
+    ssize_t lthread_read_exact(int fd, void *buf, size_t length,
+        uint64_t timeout),
+    read(fd, buf + recvd, length - recvd)
 )
 
 LTHREAD_RECV(
-    ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags, uint64_t timeout),
+    ssize_t lthread_recvmsg(int fd, struct msghdr *message, int flags,
+        uint64_t timeout),
     recvmsg(fd, message, flags FLAG)
 )
 
@@ -337,11 +342,12 @@ LTHREAD_SEND_ONCE(
 )
 
 int
-lthread_connect(int fd, struct sockaddr *name, socklen_t namelen, uint64_t timeout)
+lthread_connect(int fd, struct sockaddr *name, socklen_t namelen,
+    uint64_t timeout)
 {
 
     int ret = 0;
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
 
     while (1) {
         _lthread_renice(lt);
@@ -372,7 +378,7 @@ lthread_writev(int fd, struct iovec *iov, int iovcnt)
 {
     ssize_t total = 0;
     int iov_index = 0;
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
 
     do {
         _lthread_renice(lt);
@@ -407,7 +413,7 @@ lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
 
     off_t sbytes = 0;
     int ret = 0;
-    lthread_t *lt = lthread_get_sched()->current_lthread;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
 
     do {
         ret = sendfile(fd, s, offset, nbytes, hdtr, &sbytes, 0);

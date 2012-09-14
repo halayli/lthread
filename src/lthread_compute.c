@@ -43,28 +43,29 @@ enum {THREAD_TIMEOUT_BEFORE_EXIT = 60};
 pthread_key_t compute_sched_key;
 pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
-LIST_HEAD(compute_sched_l, _compute_sched) compute_scheds = \
+LIST_HEAD(compute_sched_l, lthread_compute_sched) compute_scheds = \
     LIST_HEAD_INITIALIZER(compute_scheds);
 pthread_mutex_t sched_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void* _lthread_compute_run(void *arg);
-static void _lthread_compute_resume(lthread_t *lt);
-static compute_sched_t * _lthread_compute_sched_create(void);
-static void _lthread_compute_sched_free(compute_sched_t *compute_sched);
+static void _lthread_compute_resume(struct lthread *lt);
+static struct lthread_compute_sched* _lthread_compute_sched_create(void);
+static void _lthread_compute_sched_free(
+    struct lthread_compute_sched *compute_sched);
 
 int
 lthread_compute_begin(void)
 {
-    sched_t *sched = lthread_get_sched();
-    compute_sched_t *compute_sched = NULL, *tmp = NULL;
-    lthread_t *lt = sched->current_lthread;
+    struct lthread_sched *sched = lthread_get_sched();
+    struct lthread_compute_sched *compute_sched = NULL, *tmp = NULL;
+    struct lthread *lt = sched->current_lthread;
     void **stack = NULL;
     void **org_stack = NULL;
 
     /* search for an empty compute_scheduler */
     pthread_mutex_lock(&sched_mutex);
     LIST_FOREACH(tmp, &compute_scheds, compute_next) {
-        if (tmp->state == COMPUTE_FREE) {
+        if (tmp->compute_st == COMPUTE_FREE) {
             compute_sched = tmp;
             break;
         }
@@ -101,7 +102,7 @@ lthread_compute_begin(void)
     stack = (void **)(lt->compute_sched->stack + MAX_STACK_SIZE);
     org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
 
-    _switch(&lt->sched->st, &lt->st);
+    _switch(&lt->sched->ctx, &lt->ctx);
 
     /* lthread_compute_begin() was called on the old stack. It pushed
      * esp to ebp when esp when pointing somewhere in the previous stack.
@@ -125,9 +126,10 @@ void
 lthread_compute_end(void)
 {
     /* get current compute scheduler */
-    compute_sched_t *compute_sched =  pthread_getspecific(compute_sched_key);
-    lthread_t *lt = compute_sched->current_lthread;
-    _switch(&compute_sched->st, &lt->st);
+    struct lthread_compute_sched *compute_sched =
+        pthread_getspecific(compute_sched_key);
+    struct lthread *lt = compute_sched->current_lthread;
+    _switch(&compute_sched->ctx, &lt->ctx);
     /* restore ebp back to its relative old stack address */
 #ifdef __i386__
     asm("movl %0, 0(%%ebp)\n" ::"a"(lt->ebp));
@@ -137,7 +139,7 @@ lthread_compute_end(void)
 }
 
 void
-_lthread_compute_add(lthread_t *lt)
+_lthread_compute_add(struct lthread *lt)
 {
 
     void **stack = NULL;
@@ -147,9 +149,9 @@ _lthread_compute_add(lthread_t *lt)
     org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
 
     /* change ebp esp to be relative to the new stack address */
-    lt->st.ebp = lt->compute_sched->st.ebp = (void*)((intptr_t)stack - \
-         ((intptr_t)org_stack - (intptr_t)(lt->st.ebp)));
-    lt->st.esp = lt->compute_sched->st.esp = (void*)((intptr_t)stack - \
+    lt->ctx.ebp = lt->compute_sched->ctx.ebp = (void*)((intptr_t)stack - \
+         ((intptr_t)org_stack - (intptr_t)(lt->ctx.ebp)));
+    lt->ctx.esp = lt->compute_sched->ctx.esp = (void*)((intptr_t)stack - \
         lt->stack_size);
 
     pthread_mutex_lock(&lt->compute_sched->lthreads_mutex);
@@ -164,7 +166,7 @@ _lthread_compute_add(lthread_t *lt)
 }
 
 static void
-_lthread_compute_sched_free(compute_sched_t *compute_sched)
+_lthread_compute_sched_free(struct lthread_compute_sched *compute_sched)
 {
     pthread_mutex_destroy(&compute_sched->run_mutex);
     pthread_mutex_destroy(&compute_sched->lthreads_mutex);
@@ -172,13 +174,14 @@ _lthread_compute_sched_free(compute_sched_t *compute_sched)
     free(compute_sched);
 }
 
-static compute_sched_t *
+static struct lthread_compute_sched*
 _lthread_compute_sched_create(void)
 {
-    compute_sched_t *compute_sched = NULL;
+    struct lthread_compute_sched *compute_sched = NULL;
     pthread_t pthread;
 
-    if ((compute_sched = calloc(1, sizeof(compute_sched_t))) == NULL)
+    if ((compute_sched = calloc(1,
+        sizeof(struct lthread_compute_sched))) == NULL)
         return NULL;
 
     if (pthread_mutex_init(&compute_sched->run_mutex, NULL) != 0 ||
@@ -202,7 +205,7 @@ _lthread_compute_sched_create(void)
 
 
 static int
-_lthread_compute_save_exec_state(lthread_t *lt)
+_lthread_compute_save_exec_state(struct lthread *lt)
 {
     void *stack_top = NULL;
     void **stack = NULL;
@@ -210,7 +213,7 @@ _lthread_compute_save_exec_state(lthread_t *lt)
     size_t size = 0;
 
     stack_top = lt->compute_sched->stack + MAX_STACK_SIZE;
-    size = stack_top - lt->st.esp;
+    size = stack_top - lt->ctx.esp;
 
     if (size && lt->stack_size != size) {
         if (lt->stack)
@@ -224,24 +227,24 @@ _lthread_compute_save_exec_state(lthread_t *lt)
 
     lt->stack_size = size;
     if (size)
-        memcpy(lt->stack, lt->st.esp, size);
+        memcpy(lt->stack, lt->ctx.esp, size);
 
     stack = (void **)(lt->compute_sched->stack + MAX_STACK_SIZE);
     org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
 
     /* change ebp & esp back to be relative to the old stack address */
-    lt->st.ebp = (void*)((intptr_t)org_stack - ((intptr_t)stack - \
-        (intptr_t)(lt->st.ebp)));
-    lt->st.esp = (void*)((intptr_t)org_stack - lt->stack_size);
+    lt->ctx.ebp = (void*)((intptr_t)org_stack - ((intptr_t)stack - \
+        (intptr_t)(lt->ctx.ebp)));
+    lt->ctx.esp = (void*)((intptr_t)org_stack - lt->stack_size);
 
     return 0;
 }
 
 static void
-_lthread_compute_resume(lthread_t *lt)
+_lthread_compute_resume(struct lthread *lt)
 {
     _restore_exec_state(lt);
-    _switch(&lt->st, &lt->compute_sched->st);
+    _switch(&lt->ctx, &lt->compute_sched->ctx);
     _lthread_compute_save_exec_state(lt);
 }
 
@@ -257,8 +260,8 @@ once_routine(void)
 static void*
 _lthread_compute_run(void *arg)
 {
-    compute_sched_t *compute_sched = arg;
-    lthread_t *lt = NULL;
+    struct lthread_compute_sched *compute_sched = arg;
+    struct lthread *lt = NULL;
     struct timespec timeout;
     int status = 0;
     int ret = 0;
@@ -291,12 +294,12 @@ _lthread_compute_run(void *arg)
             pthread_mutex_unlock(&compute_sched->lthreads_mutex);
 
             compute_sched->current_lthread = lt;
-            compute_sched->state = COMPUTE_BUSY;
+            compute_sched->compute_st = COMPUTE_BUSY;
 
             _lthread_compute_resume(lt);
 
             compute_sched->current_lthread = NULL;
-            compute_sched->state = COMPUTE_FREE;
+            compute_sched->compute_st = COMPUTE_FREE;
 
             /* resume it back on the  prev scheduler */
             pthread_mutex_lock(&lt->sched->compute_mutex);
@@ -310,7 +313,7 @@ _lthread_compute_run(void *arg)
 
         pthread_mutex_lock(&compute_sched->run_mutex);
         /* wait if we have no work to do, exit */
-        timeout.tv_sec = time(NULL) + THREAD_TIMEOUT_BEFORE_EXIT; 
+        timeout.tv_sec = time(NULL) + THREAD_TIMEOUT_BEFORE_EXIT;
         timeout.tv_nsec = 0;
         status = pthread_cond_timedwait(&compute_sched->run_mutex_cond,
             &compute_sched->run_mutex, &timeout);

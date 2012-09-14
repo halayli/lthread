@@ -36,18 +36,16 @@ register_rd_interest(int fd)
     struct epoll_event ev;
     int ret = 0;
     sched_t *sched = lthread_get_sched();
-    lthread_t *lt = sched->current_lthread;
 
     ev.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
-    if (lt != NULL)
-        ev.data.ptr = lt;
-    ret = epoll_ctl(sched->poller, EPOLL_CTL_MOD, fd, &ev);
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_MOD, fd, &ev);
     if (ret < 0)
-        ret = epoll_ctl(sched->poller, EPOLL_CTL_ADD, fd, &ev);
+        ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_ADD, fd, &ev);
     assert(ret != -1);
 
-    if (lt != NULL)
+    /* compute sched can have a NULL current_ltread */ 
+    if (sched->current_lthread != NULL)
         lt->state |= bit(LT_WAIT_READ);
 }
 
@@ -57,18 +55,15 @@ register_wr_interest(int fd)
     struct epoll_event ev;
     int ret = 0;
     sched_t *sched = lthread_get_sched();
-    lthread_t *lt = sched->current_lthread;
 
     ev.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
-    if (lt != NULL)
-        ev.data.ptr = lt;
-    ret = epoll_ctl(sched->poller, EPOLL_CTL_MOD, fd, &ev);
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_MOD, fd, &ev);
     if (ret < 0)
-        ret = epoll_ctl(sched->poller, EPOLL_CTL_ADD, fd, &ev);
+        ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_ADD, fd, &ev);
     assert(ret != -1);
 
-    if (lt != NULL)
+    if (sched->lt != NULL)
         lt->state |= bit(LT_WAIT_WRITE);
 }
 
@@ -76,9 +71,12 @@ inline void
 clear_interest(int fd)
 {
     struct epoll_event ev;
+    int ret = 0;
     sched_t *sched = lthread_get_sched();
+
     ev.data.fd = fd;
-    epoll_ctl(sched->poller, EPOLL_CTL_DEL, fd, &ev);
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_DEL, fd, &ev);
+    assert(ret != -1);
 }
 
 int
@@ -92,7 +90,7 @@ poll_events(struct timespec t)
 {
     sched_t *sched = lthread_get_sched();
 
-    return epoll_wait(sched->poller, sched->eventlist, LT_MAX_EVENTS,
+    return epoll_wait(sched->poller_fd, sched->eventlist, LT_MAX_EVENTS,
         t.tv_sec*1000 + t.tv_nsec/1000000);
 }
 
@@ -106,12 +104,6 @@ inline int
 get_event(struct epoll_event *ev)
 {
     return ev->events;
-}
-
-inline void *
-get_data(struct epoll_event *ev)
-{
-    return ev->data.ptr;
 }
 
 inline int
