@@ -116,9 +116,7 @@ struct lthread {
     struct lthread_sched    *sched;         /* scheduler lthread belongs to */
     uint64_t                birth;          /* time lthread was born */
     uint64_t                id;             /* lthread id */
-    int                     fd_wait;        /* fd we are waiting on */
-    enum lthread_event      fd_event;       /* fd event are waiting on */
-    long                    fd_key;         /* key to use in tree */
+    int64_t                 fd_wait;        /* fd we are waiting on */
     char                    funcname[64];   /* optional func name */
     struct lthread          *lt_join;       /* lthread we want to join on */
     void                    **lt_exit_ptr;  /* exit ptr for lthread_join */
@@ -127,8 +125,8 @@ struct lthread {
     uint32_t                ops;            /* num of ops since yield */
     uint64_t                sleep_usecs;    /* how long lthread sleep */
     uint64_t                timeout;        /* how long lthread sleep */
-    RB_ENTRY(lthread)       sleep_node;      /* tree node pointer */
-    RB_ENTRY(lthread)       wait_node;        /* tree node pointer */
+    RB_ENTRY(lthread)       sleep_node;     /* tree node pointer */
+    RB_ENTRY(lthread)       wait_node;      /* tree node pointer */
     TAILQ_ENTRY(lthread)    ready_next;     /* ready to run list */
     TAILQ_ENTRY(lthread)    cond_next;      /* waiting on a cond var */
     LIST_ENTRY(lthread)     compute_next;   /* waiting to enter compute */

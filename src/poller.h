@@ -40,6 +40,8 @@ inline int poll_events(struct timespec t);
 inline int get_event(struct kevent *ev);
 inline int get_fd(struct kevent *ev);
 inline int is_eof(struct kevent *ev);
+inline int is_read(struct kevent *ev);
+inline int is_write(struct kevent *ev);
 #else
 inline int get_event(struct epoll_event *ev);
 inline int get_fd(struct epoll_event *ev);

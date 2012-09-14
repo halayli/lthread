@@ -195,12 +195,9 @@ _lthread_key_destructor(void *data)
 static void
 _lthread_key_create(void)
 {
-    if (pthread_key_create(&lthread_sched_key, _lthread_key_destructor)) {
-        perror("Failed to allocate sched key");
-	    abort();
-        return;
-    }
-    pthread_setspecific(lthread_sched_key, NULL);
+    assert(pthread_key_create(&lthread_sched_key,
+        _lthread_key_destructor) == 0);
+    assert(pthread_setspecific(lthread_sched_key, NULL) == 0);
 
     return;
 }
@@ -263,9 +260,9 @@ void
 _sched_free(struct lthread_sched *sched)
 {
     free(sched->stack);
-    pthread_mutex_destroy(&sched->compute_mutex);
+    assert(pthread_mutex_destroy(&sched->compute_mutex) == 0);
     free(sched);
-    pthread_setspecific(lthread_sched_key, NULL);
+    assert(pthread_setspecific(lthread_sched_key, NULL) == 0);
 }
 
 int
@@ -281,7 +278,7 @@ sched_create(size_t stack_size)
         return errno;
     }
 
-    pthread_setspecific(lthread_sched_key, new_sched);
+    assert(pthread_setspecific(lthread_sched_key, new_sched) == 0);
 
     if ((new_sched->stack = calloc(1, sched_stack_size)) == NULL) {
         free(new_sched);
@@ -347,7 +344,7 @@ int
 lthread_create(struct lthread **new_lt, void *fun, void *arg)
 {
     struct lthread *lt = NULL;
-    pthread_once(&key_once, _lthread_key_create);
+    assert(pthread_once(&key_once, _lthread_key_create) == 0);
     struct lthread_sched *sched = lthread_get_sched();
 
     if (sched == NULL) {
@@ -504,7 +501,7 @@ _lthread_sleep_cmp(struct lthread *l1, struct lthread *l2)
 inline uint64_t
 _lthread_wait_cmp(struct lthread *l1, struct lthread *l2)
 {
-    return (l2->fd_key - l1->fd_key);
+    return (l2->fd_wait >> sizeof(int)) - (l1->fd_wait >> sizeof(int));
 }
 
 void

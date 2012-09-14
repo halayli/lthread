@@ -63,7 +63,7 @@ lthread_compute_begin(void)
     void **org_stack = NULL;
 
     /* search for an empty compute_scheduler */
-    pthread_mutex_lock(&sched_mutex);
+    assert(pthread_mutex_lock(&sched_mutex) == 0);
     LIST_FOREACH(tmp, &compute_scheds, compute_next) {
         if (tmp->compute_st == COMPUTE_FREE) {
             compute_sched = tmp;
@@ -79,7 +79,7 @@ lthread_compute_begin(void)
              */
             compute_sched = LIST_FIRST(&compute_scheds);
             if (compute_sched == NULL) {
-                pthread_mutex_unlock(&sched_mutex);
+                assert(pthread_mutex_unlock(&sched_mutex) == 0);
                 return -1;
             }
         } else {
@@ -90,11 +90,11 @@ lthread_compute_begin(void)
     lt->compute_sched = compute_sched;
 
     lt->state |= bit(LT_PENDING_RUNCOMPUTE);
-    pthread_mutex_lock(&lt->compute_sched->lthreads_mutex);
+    assert(pthread_mutex_lock(&lt->compute_sched->lthreads_mutex) == 0);
     LIST_INSERT_HEAD(&lt->compute_sched->lthreads, lt, compute_next);
-    pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex);
+    assert(pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex) == 0);
 
-    pthread_mutex_unlock(&sched_mutex);
+    assert(pthread_mutex_unlock(&sched_mutex) == 0);
 
     /* yield function in scheduler to allow other lthreads to run while
      * this lthread runs in a pthread for expensive computations.
@@ -129,6 +129,7 @@ lthread_compute_end(void)
     struct lthread_compute_sched *compute_sched =
         pthread_getspecific(compute_sched_key);
     struct lthread *lt = compute_sched->current_lthread;
+    assert(compute_sched != NULL);
     _switch(&compute_sched->ctx, &lt->ctx);
     /* restore ebp back to its relative old stack address */
 #ifdef __i386__
@@ -154,23 +155,23 @@ _lthread_compute_add(struct lthread *lt)
     lt->ctx.esp = lt->compute_sched->ctx.esp = (void*)((intptr_t)stack - \
         lt->stack_size);
 
-    pthread_mutex_lock(&lt->compute_sched->lthreads_mutex);
+    assert(pthread_mutex_lock(&lt->compute_sched->lthreads_mutex) == 0);
     lt->state &= clearbit(LT_PENDING_RUNCOMPUTE);
     lt->state |= bit(LT_RUNCOMPUTE);
-    pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex);
+    assert(pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex) == 0);
     /* wakeup pthread if it was sleeping */
-    pthread_mutex_lock(&lt->compute_sched->run_mutex);
-    pthread_cond_signal(&lt->compute_sched->run_mutex_cond);
-    pthread_mutex_unlock(&lt->compute_sched->run_mutex);
+    assert(pthread_mutex_lock(&lt->compute_sched->run_mutex) == 0);
+    assert(pthread_cond_signal(&lt->compute_sched->run_mutex_cond) == 0);
+    assert(pthread_mutex_unlock(&lt->compute_sched->run_mutex) == 0);
 
 }
 
 static void
 _lthread_compute_sched_free(struct lthread_compute_sched *compute_sched)
 {
-    pthread_mutex_destroy(&compute_sched->run_mutex);
-    pthread_mutex_destroy(&compute_sched->lthreads_mutex);
-    pthread_cond_destroy(&compute_sched->run_mutex_cond);
+    assert(pthread_mutex_destroy(&compute_sched->run_mutex) == 0);
+    assert(pthread_mutex_destroy(&compute_sched->lthreads_mutex) == 0);
+    assert(pthread_cond_destroy(&compute_sched->run_mutex_cond) == 0);
     free(compute_sched);
 }
 
@@ -196,7 +197,7 @@ _lthread_compute_sched_create(void)
         _lthread_compute_sched_free(compute_sched);
         return NULL;
     }
-    pthread_detach(pthread);
+    assert(pthread_detach(pthread) == 0);
 
     LIST_INIT(&compute_sched->lthreads);
 
@@ -251,10 +252,7 @@ _lthread_compute_resume(struct lthread *lt)
 void
 once_routine(void)
 {
-    if (pthread_key_create(&compute_sched_key, NULL)) {
-        perror("Failed to allocate compute sched key");
-        assert(0);
-    }
+    assert(pthread_key_create(&compute_sched_key, NULL) == 0);
 }
 
 static void*
@@ -267,31 +265,32 @@ _lthread_compute_run(void *arg)
     int ret = 0;
     (void)ret; /* silence compiler */
 
-    pthread_once(&key_once, once_routine);
-
-    pthread_setspecific(compute_sched_key, arg);
+    assert(pthread_once(&key_once, once_routine) == 0);
+    assert(pthread_setspecific(compute_sched_key, arg) == 0);
 
     while (1) {
 
         /* resume lthreads to run their computation or make a blocking call */
         while (1) {
-            pthread_mutex_lock(&compute_sched->lthreads_mutex);
+            assert(pthread_mutex_lock(&compute_sched->lthreads_mutex) == 0);
 
             /* we have no work to do, break and wait 60 secs then exit */
             if (LIST_EMPTY(&compute_sched->lthreads)) {
-                pthread_mutex_unlock(&compute_sched->lthreads_mutex);
+                assert(pthread_mutex_unlock(
+                    &compute_sched->lthreads_mutex) == 0);
                 break;
             }
 
             lt = LIST_FIRST(&compute_sched->lthreads);
             if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
-                pthread_mutex_unlock(&compute_sched->lthreads_mutex);
+                assert(pthread_mutex_unlock(
+                    &compute_sched->lthreads_mutex) == 0);
                 continue;
             }
 
             LIST_REMOVE(lt, compute_next);
 
-            pthread_mutex_unlock(&compute_sched->lthreads_mutex);
+            assert(pthread_mutex_unlock(&compute_sched->lthreads_mutex) == 0);
 
             compute_sched->current_lthread = lt;
             compute_sched->compute_st = COMPUTE_BUSY;
@@ -302,43 +301,44 @@ _lthread_compute_run(void *arg)
             compute_sched->compute_st = COMPUTE_FREE;
 
             /* resume it back on the  prev scheduler */
-            pthread_mutex_lock(&lt->sched->compute_mutex);
+            assert(pthread_mutex_lock(&lt->sched->compute_mutex) == 0);
             LIST_INSERT_HEAD(&lt->sched->compute, lt, compute_sched_next);
-            pthread_mutex_unlock(&lt->sched->compute_mutex);
+            assert(pthread_mutex_unlock(&lt->sched->compute_mutex) == 0);
 
             /* signal the prev scheduler in case it was sleeping in a poll */
             ret = write(lt->sched->compute_pipes[1], "1", 1);
+            assert(ret == 1);
             lt->state &= clearbit(LT_RUNCOMPUTE);
         }
 
-        pthread_mutex_lock(&compute_sched->run_mutex);
+        assert(pthread_mutex_lock(&compute_sched->run_mutex) == 0);
         /* wait if we have no work to do, exit */
         timeout.tv_sec = time(NULL) + THREAD_TIMEOUT_BEFORE_EXIT;
         timeout.tv_nsec = 0;
         status = pthread_cond_timedwait(&compute_sched->run_mutex_cond,
             &compute_sched->run_mutex, &timeout);
-        pthread_mutex_unlock(&compute_sched->run_mutex);
+        assert(pthread_mutex_unlock(&compute_sched->run_mutex) == 0);
 
         /* if we didn't timeout, then we got signaled to do some work */
         if (status != ETIMEDOUT)
             continue;
 
         /* lock the global sched to check if we have any pending work to do */
-        pthread_mutex_lock(&sched_mutex);
+        assert(pthread_mutex_lock(&sched_mutex) == 0);
 
-        pthread_mutex_lock(&compute_sched->lthreads_mutex);
+        assert(pthread_mutex_lock(&compute_sched->lthreads_mutex) == 0);
         if (LIST_EMPTY(&compute_sched->lthreads)) {
 
             LIST_REMOVE(compute_sched, compute_next);
 
-            pthread_mutex_unlock(&compute_sched->lthreads_mutex);
-            pthread_mutex_unlock(&sched_mutex);
+            assert(pthread_mutex_unlock(&compute_sched->lthreads_mutex) == 0);
+            assert(pthread_mutex_unlock(&sched_mutex) == 0);
             _lthread_compute_sched_free(compute_sched);
             break;
         }
 
-        pthread_mutex_unlock(&compute_sched->lthreads_mutex);
-        pthread_mutex_unlock(&sched_mutex);
+        assert(pthread_mutex_unlock(&compute_sched->lthreads_mutex) == 0);
+        assert(pthread_mutex_unlock(&sched_mutex) == 0);
     }
 
 

@@ -40,6 +40,10 @@
 #include "time_utils.h"
 #include "tree.h"
 
+#define FD_KEY(f,e) (((int64_t)(f) << (sizeof(int32_t) * 8)) | e)
+#define FD_EVENT(f) ((int32_t)(f))
+#define FD_ONLY(f) ((f) >> ((sizeof(int32_t) * 8)))
+
 RB_GENERATE_STATIC(lthread_rb_sleep, lthread, sleep_node, _lthread_sleep_cmp);
 RB_GENERATE(lthread_rb_wait, lthread, wait_node, _lthread_wait_cmp);
 static uint64_t _min_timeout(struct lthread_sched *);
@@ -90,7 +94,7 @@ lthread_run(void)
                 break;
             }
             LIST_REMOVE(lt, compute_sched_next);
-            pthread_mutex_unlock(&sched->compute_mutex);
+            assert(pthread_mutex_unlock(&sched->compute_mutex) == 0);
             _lthread_resume(lt);
         }
 
@@ -108,6 +112,7 @@ lthread_run(void)
             fd = get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
                 ret = read(fd, &tmp, sizeof(tmp));
+                assert(ret > 0);
                 continue;
             }
 
@@ -116,7 +121,7 @@ lthread_run(void)
                 errno = ECONNRESET;
             }
 
-            find_lt.fd_key = fd << 8 | LT_READ;
+            find_lt.fd_wait = FD_KEY(fd, LT_READ);
             lt_read = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
             if (lt_read != NULL) {
                 RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt_read);
@@ -124,7 +129,7 @@ lthread_run(void)
                 _lthread_resume(lt_read);
             }
 
-            find_lt.fd_key = fd << 8 | LT_WRITE;
+            find_lt.fd_wait = FD_KEY(fd, LT_WRITE);
             lt_write = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
             if (lt_write != NULL) {
                 RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt_write);
@@ -148,7 +153,7 @@ _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e)
     struct lthread *lt_tmp = NULL;
     if (lt->state & bit(LT_WAIT_READ) ||
         lt->state & bit(LT_WAIT_WRITE)) {
-        printf("Unexpected event. lt id %"PRIu64" fd %d already in %d state\n",
+        printf("Unexpected event. lt id %"PRIu64" fd %ld already in %d state\n",
             lt->id, lt->fd_wait, lt->state);
         assert(0);
     }
@@ -160,7 +165,7 @@ _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e)
     else
         assert(0);
 
-    lt->fd_key = (fd << 8) | e;
+    lt->fd_wait = FD_KEY(fd, e);
     lt_tmp = RB_INSERT(lthread_rb_wait, &lt->sched->waiting, lt);
     assert(lt_tmp == NULL);
     _lthread_yield(lt);
@@ -293,10 +298,10 @@ _resume_expired_lthreads(struct lthread_sched *sched)
             RB_REMOVE(lthread_rb_sleep, &sched->sleeping, lt);
             lt->state &= clearbit(LT_SLEEPING);
             if (lt->fd_wait >= 0) {
-                if (lt->fd_event == LT_WRITE)
-                    clear_wr_interest(lt->fd_wait);
+                if (FD_EVENT(lt->fd_wait) == LT_WRITE)
+                    clear_wr_interest(FD_ONLY(lt->fd_wait));
                 else
-                    clear_rd_interest(lt->fd_wait);
+                    clear_rd_interest(FD_ONLY(lt->fd_wait));
                 RB_REMOVE(lthread_rb_wait, &sched->waiting, lt);
             }
             if (_lthread_resume(lt) != -1)

@@ -68,14 +68,28 @@ register_wr_interest(int fd)
 }
 
 inline void
-clear_interest(int fd)
+clear_wr_interest(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
     sched_t *sched = lthread_get_sched();
 
     ev.data.fd = fd;
-    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_DEL, fd, &ev);
+    ev.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_MOD, fd, &ev);
+    assert(ret != -1);
+}
+
+inline void
+clear_rd_interest(int fd)
+{
+    struct epoll_event ev;
+    int ret = 0;
+    sched_t *sched = lthread_get_sched();
+
+    ev.data.fd = fd;
+    ev.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_MOD, fd, &ev);
     assert(ret != -1);
 }
 
@@ -110,4 +124,16 @@ inline int
 is_eof(struct epoll_event *ev)
 {
     return ev->events & EPOLLHUP;
+}
+
+inline int
+is_write(struct epoll_event *ev)
+{
+    return ev->events & EPOLLOUT;
+}
+
+inline int
+is_read(struct epoll_event *ev)
+{
+    return ev->events & EPOLLIN;
 }
