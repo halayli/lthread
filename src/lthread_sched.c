@@ -108,7 +108,8 @@ lthread_run(void)
         while (sched->num_new_events) {
             p = --sched->num_new_events;
 
-            /* We got signaled via pipe to wakeup from polling & rusume compute.
+            /* 
+             * We got signaled via pipe to wakeup from polling & rusume compute.
              * Those lthreads will get handled in step 3.
              */
             fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
@@ -323,7 +324,7 @@ _lthread_resume_expired(struct lthread_sched *sched)
                 _lthread_desched(lt);
             }
 
-            /* if lthread is detached and got freed then lt becomes NULL */
+            /* no need to clear expired if lthread exited/cancelled */
             if (_lthread_resume(lt) != -1)
                 lt->state &= CLEARBIT(LT_EXPIRED);
 

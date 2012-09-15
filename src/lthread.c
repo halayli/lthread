@@ -139,18 +139,20 @@ _lthread_free(struct lthread *lt)
 int
 _lthread_resume(struct lthread *lt)
 {
+
+    struct lthread_sched *sched = lthread_get_sched();
+
     if (lt->state & BIT(LT_CANCELLED)) {
         /* if an lthread was joining on it, schedule it to run */
         if (lt->lt_join) {
             _lthread_desched(lt->lt_join);
-            TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt->lt_join,
-                ready_next);
+            TAILQ_INSERT_TAIL(&sched->ready, lt->lt_join, ready_next);
             lt->lt_join = NULL;
         }
         /* if lthread is detached, then we can free it up */
         if (lt->state & BIT(LT_DETACH))
             _lthread_free(lt);
-        return (0);
+        return (-1);
     }
 
     if (lt->state & BIT(LT_NEW))
@@ -158,16 +160,15 @@ _lthread_resume(struct lthread *lt)
 
     _restore_exec_state(lt);
 
-    lthread_get_sched()->current_lthread = lt;
+    sched->current_lthread = lt;
     _switch(&lt->ctx, &lt->sched->ctx);
-    lthread_get_sched()->current_lthread = NULL;
+    sched->current_lthread = NULL;
 
     if (lt->state & BIT(LT_EXITED)) {
         if (lt->lt_join) {
             /* if lthread was sleeping, deschedule it so it doesn't expire. */
             _lthread_desched(lt->lt_join);
-            TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt->lt_join,
-                ready_next);
+            TAILQ_INSERT_TAIL(&sched->ready, lt->lt_join, ready_next);
             lt->lt_join = NULL;
         }
 
@@ -385,6 +386,8 @@ lthread_cancel(struct lthread *lt)
      * we don't schedule the cancelled lthread if it was running in a compute
      * scheduler or pending to run in a compute scheduler. otherwise it could
      * get freed while it's still running.
+     * when it's done in compute_scheduler - the scheduler will attempt to run
+     * it and realize it's cancelled and abort the resumption.
      */
     if (lt->state & BIT(LT_PENDING_RUNCOMPUTE) ||
         lt->state & BIT(LT_RUNCOMPUTE))
@@ -510,7 +513,7 @@ lthread_join(struct lthread *lt, void **ptr, uint64_t timeout)
     current->lt_exit_ptr = ptr;
     int ret = 0;
 
-    /* abort if the lthread has exited already */
+    /* fail if the lthread has exited already */
     if (lt->state & BIT(LT_EXITED))
         return (-1);
 
