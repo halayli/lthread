@@ -1,5 +1,5 @@
-#ifndef LT_TIME
-#define LT_TIME
+#ifndef LTHREAD_TIME
+#define LTHREAD_TIME
 #include <stdint.h>
 
 uint64_t tick_diff_usecs(uint64_t t1, uint64_t t2);
