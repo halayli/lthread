@@ -27,25 +27,18 @@
  */
 
 
-#ifndef _LTHREAD_INT_H_
-#define _LTHREAD_INT_H_
+#ifndef LTHREAD_INT_H
+#define LTHREAD_INT_H
 
-#include "queue.h"
 #include <sys/types.h>
 #include <errno.h>
 #include <pthread.h>
-
-#if defined(__FreeBSD__) || defined(__APPLE__)
-#include <sys/event.h>
-#else
-#include <sys/epoll.h>
-#endif
-
-#include <pthread.h>
 #include <time.h>
-#include "time_utils.h"
+
+#include "lthread_poller.h"
+#include "lthread_time.h"
+#include "queue.h"
 #include "tree.h"
-#include "poller.h"
 
 #define LT_MAX_EVENTS    (1024)
 #define MAX_STACK_SIZE (4*1024*1024)
@@ -159,8 +152,7 @@ struct lthread_sched {
     /* poller variables */
     int                 poller_fd;
 #if defined(__FreeBSD__) || defined(__APPLE__)
-    struct kevent       *changelist;
-    uint32_t            changelist_size;
+    struct kevent       changelist[LT_MAX_EVENTS];
 #endif
     POLL_EVENT_TYPE     eventlist[LT_MAX_EVENTS];
     int                 nevents;
@@ -195,7 +187,6 @@ void    _lthread_yield(struct lthread *lt);
 void    _lthread_free(struct lthread *lt);
 void    _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e);
 int     _sched_lthread(struct lthread *lt,  uint64_t usecs);
-void    _sched_grow_eventlist(void);
 void    _desched_lthread(struct lthread *lt);
 void    clear_rd_wr_state(struct lthread *lt);
 inline int _restore_exec_state(struct lthread *lt);

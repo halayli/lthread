@@ -37,7 +37,7 @@
 #include <inttypes.h>
 
 #include "lthread_int.h"
-#include "time_utils.h"
+#include "lthread_time.h"
 #include "tree.h"
 
 #define FD_KEY(f,e) (((int64_t)(f) << (sizeof(int32_t) * 8)) | e)
@@ -300,8 +300,10 @@ _resume_expired_lthreads(struct lthread_sched *sched)
             if (lt->fd_wait >= 0) {
                 if (FD_EVENT(lt->fd_wait) == LT_WRITE)
                     clear_wr_interest(FD_ONLY(lt->fd_wait));
-                else
+                else if (FD_EVENT(lt->fd_wait) == LT_READ)
                     clear_rd_interest(FD_ONLY(lt->fd_wait));
+                else
+                    assert(0); /* impossible state */
                 RB_REMOVE(lthread_rb_wait, &sched->waiting, lt);
             }
             if (_lthread_resume(lt) != -1)

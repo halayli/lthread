@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * kqueue.c
+ * lthread_kqueue.c
  */
 
 #include "lthread_int.h"
@@ -31,11 +31,24 @@
 #include <assert.h>
 
 inline void
+flush_events(void)
+{
+    struct lthread_sched *sched = lthread_get_sched();
+    struct timespec tm = {0, 0};
+    int ret = 0;
+
+    ret = kevent(sched->poller_fd, sched->changelist,
+        sched->nevents, NULL, 0, &tm);
+    assert(ret == 0);
+    sched->nevents = 0;
+}
+
+inline void
 register_rd_interest(int fd)
 {
     struct lthread_sched *sched = lthread_get_sched();
-    if (sched->nevents == sched->changelist_size)
-        _sched_grow_eventlist();
+    if (sched->nevents == LT_MAX_EVENTS)
+        flush_events();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_READ,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
     if (sched->current_lthread)
@@ -46,8 +59,8 @@ inline void
 register_wr_interest(int fd)
 {
     struct lthread_sched *sched = lthread_get_sched();
-    if (sched->nevents == sched->changelist_size)
-        _sched_grow_eventlist();
+    if (sched->nevents == LT_MAX_EVENTS)
+        flush_events();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_WRITE,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
     sched->current_lthread->state |= bit(LT_WAIT_WRITE);

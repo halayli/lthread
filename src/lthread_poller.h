@@ -23,40 +23,38 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * time_utils.c
+ * poller.h
  */
 
-#include "time_utils.h"
 
-uint64_t
-tick_diff_usecs(uint64_t t1, uint64_t t2)
-{
-       uint64_t t3 =  0;
-	t3 = ((long double)(t2 - t1)/2793008320u) * 1000000u;
-       return t3;
-}
+#ifndef LTHREAD_POLLER_H
+#define LTHREAD_POLLER_H 
 
-uint64_t
-tick_diff_msecs(uint64_t t1, uint64_t t2)
-{
-       uint64_t t3 =  0;
-	t3 = ((long double)(t2 - t1)/2793008320u) * 1000000u;
-       return t3/1000;
-}
+#if defined(__FreeBSD__) || defined(__APPLE__)
+#include <sys/event.h>
+#else
+#include <sys/epoll.h>
+#endif
 
-uint64_t
-tick_diff_secs(uint64_t t1, uint64_t t2)
-{
-       uint64_t t3 = ((long double)(t2 - t1)/2793008320u) * 1000000u;
-       return t3/1000000;
-}
+inline void register_rd_interest(int fd);
+inline void register_wr_interest(int fd);
+inline void clear_wr_interest(int fd);
+inline void clear_rd_interest(int fd);
+int create_poller(void);
+inline int poll_events(struct timespec t);
 
-uint64_t
-rdtsc(void)
-{
-  uint32_t a = 0, d = 0;
+#if defined(__FreeBSD__) || defined(__APPLE__)
+inline int get_event(struct kevent *ev);
+inline int get_fd(struct kevent *ev);
+inline int is_eof(struct kevent *ev);
+inline int is_read(struct kevent *ev);
+inline int is_write(struct kevent *ev);
+#else
+inline int get_event(struct epoll_event *ev);
+inline int get_fd(struct epoll_event *ev);
+inline int is_eof(struct epoll_event *ev);
+inline int is_read(struct epoll_event *ev);
+inline int is_write(struct epoll_event *ev);
+#endif
 
-  asm volatile ("rdtsc" : "=a"(a), "=d"(d));
-  return (((uint64_t) d << 32) | a);
-}
-
+#endif

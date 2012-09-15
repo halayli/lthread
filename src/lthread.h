@@ -27,8 +27,8 @@
  */
 
 
-#ifndef _LTHREAD_H_
-#define _LTHREAD_H_ 
+#ifndef LTHREAD_H
+#define LTHREAD_H
 
 #include <sys/socket.h>
 #include <fcntl.h>
@@ -37,7 +37,7 @@
 
 #define DEFINE_LTHREAD (lthread_set_funcname(__func__))
 
-#ifndef _LTHREAD_INT_H_
+#ifndef LTHREAD_INT_H
 struct lthread;
 struct lthread_cond;
 typedef struct lthread lthread_t;

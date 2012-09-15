@@ -37,9 +37,9 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "time_utils.h"
+#include "lthread_time.h"
 #include "lthread_int.h"
-#include "poller.h"
+#include "lthread_poller.h"
 
 extern int errno;
 
@@ -317,27 +317,7 @@ sched_create(size_t stack_size)
 
     bzero(&new_sched->ctx, sizeof(struct cpu_ctx));
 
-    if ((new_sched->changelist =
-        calloc(1024, sizeof(POLL_EVENT_TYPE))) == NULL) {
-        _sched_free(new_sched);
-        return errno;
-    }
-
-    new_sched->changelist_size = 1024;
-
     return 0;
-}
-
-void
-_sched_grow_eventlist(void)
-{
-    POLL_EVENT_TYPE *tmp = NULL;
-    struct lthread_sched *sched = lthread_get_sched();
-
-    sched->changelist_size += 1024;
-    tmp = realloc(sched->changelist, sched->changelist_size);
-    assert(tmp != NULL);
-    sched->changelist = tmp;
 }
 
 int

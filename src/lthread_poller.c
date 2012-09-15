@@ -23,31 +23,12 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * poller.h
+ * poller.c
  */
 
 
-#ifndef _LTHREAD_POLLER_H_
-#define _LTHREAD_POLLER_H_ 
-inline void register_rd_interest(int fd);
-inline void register_wr_interest(int fd);
-inline void clear_wr_interest(int fd);
-inline void clear_rd_interest(int fd);
-int create_poller(void);
-inline int poll_events(struct timespec t);
-
 #if defined(__FreeBSD__) || defined(__APPLE__)
-inline int get_event(struct kevent *ev);
-inline int get_fd(struct kevent *ev);
-inline int is_eof(struct kevent *ev);
-inline int is_read(struct kevent *ev);
-inline int is_write(struct kevent *ev);
+#include "lthread_kqueue.c"
 #else
-inline int get_event(struct epoll_event *ev);
-inline int get_fd(struct epoll_event *ev);
-inline int is_eof(struct epoll_event *ev);
-inline int is_read(struct epoll_event *ev);
-inline int is_write(struct epoll_event *ev);
-#endif
-
+#include "lthread_epoll.c"
 #endif
