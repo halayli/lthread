@@ -44,12 +44,14 @@
 #define FD_EVENT(f) ((int32_t)(f))
 #define FD_ONLY(f) ((f) >> ((sizeof(int32_t) * 8)))
 
-RB_GENERATE_STATIC(lthread_rb_sleep, lthread, sleep_node, _lthread_sleep_cmp);
+RB_GENERATE(lthread_rb_sleep, lthread, sleep_node, _lthread_sleep_cmp);
 RB_GENERATE(lthread_rb_wait, lthread, wait_node, _lthread_wait_cmp);
-static uint64_t _min_timeout(struct lthread_sched *);
+
+static uint64_t _lthread_min_timeout(struct lthread_sched *);
 
 static int  _lthread_poll(void);
-static void _resume_expired_lthreads(struct lthread_sched *sched);
+static void _lthread_resume_expired(struct lthread_sched *sched);
+static inline void _lthread_clear_rd_wr_state(struct lthread *lt);
 
 static char tmp[100];
 static struct lthread find_lt;
@@ -75,7 +77,7 @@ lthread_run(void)
         !TAILQ_EMPTY(&sched->ready)) {
 
         /* 1. start by checking if a sleeping thread needs to wakeup */
-        _resume_expired_lthreads(sched);
+        _lthread_resume_expired(sched);
 
         /* 2. check to see if we have any ready threads to run */
         while (!TAILQ_EMPTY(&sched->ready)) {
@@ -99,7 +101,7 @@ lthread_run(void)
         }
 
         /* 4. check if we received any events after lthread_poll */
-        register_rd_interest(sched->compute_pipes[0]);
+        _lthread_poller_ev_register_rd(sched->compute_pipes[0]);
         _lthread_poll();
 
         /* 5. fire up lthreads that are ready to run */
@@ -109,33 +111,25 @@ lthread_run(void)
             /* We got signaled via pipe to wakeup from polling & rusume compute.
              * Those lthreads will get handled in step 3.
              */
-            fd = get_fd(&sched->eventlist[p]);
+            fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
                 ret = read(fd, &tmp, sizeof(tmp));
                 assert(ret > 0);
                 continue;
             }
 
-            if (is_eof(&sched->eventlist[p])) {
-                lt->state |= bit(LT_FDEOF);
+            if (_lthread_poller_ev_is_eof(&sched->eventlist[p])) {
+                lt->state |= BIT(LT_FDEOF);
                 errno = ECONNRESET;
             }
 
-            find_lt.fd_wait = FD_KEY(fd, LT_READ);
-            lt_read = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
-            if (lt_read != NULL) {
-                RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt_read);
-                _desched_lthread(lt_read);
+            lt_read = _lthread_remove_waiting_on(fd, LT_READ);
+            if (lt_read != NULL)
                 _lthread_resume(lt_read);
-            }
 
-            find_lt.fd_wait = FD_KEY(fd, LT_WRITE);
-            lt_write = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
-            if (lt_write != NULL) {
-                RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt_write);
-                _desched_lthread(lt_write);
+            lt_write = _lthread_remove_waiting_on(fd, LT_WRITE);
+            if (lt_write != NULL)
                 _lthread_resume(lt_write);
-            }
 
             assert(lt_write != NULL || lt_read != NULL);
         }
@@ -146,22 +140,39 @@ lthread_run(void)
     return;
 }
 
+struct lthread*
+_lthread_remove_waiting_on(int fd, enum lthread_event e)
+{
+    struct lthread *lt = NULL;
+    struct lthread_sched *sched = lthread_get_sched();
+    find_lt.fd_wait = FD_KEY(fd, e);
+
+    lt = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
+    if (lt != NULL) {
+        RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt);
+        _lthread_desched(lt);
+        _lthread_clear_rd_wr_state(lt);
+    }
+
+    return (lt);
+}
+
 void
 _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e)
 {
     //printf("registering lt %llu for %d\n", lt->id, e);
     struct lthread *lt_tmp = NULL;
-    if (lt->state & bit(LT_WAIT_READ) ||
-        lt->state & bit(LT_WAIT_WRITE)) {
+    if (lt->state & BIT(LT_WAIT_READ) ||
+        lt->state & BIT(LT_WAIT_WRITE)) {
         printf("Unexpected event. lt id %"PRIu64" fd %ld already in %d state\n",
             lt->id, lt->fd_wait, lt->state);
         assert(0);
     }
 
     if (e == LT_READ)
-        register_rd_interest(fd);
+        _lthread_poller_ev_register_rd(fd);
     else if (e == LT_WRITE)
-        register_wr_interest(fd);
+        _lthread_poller_ev_register_wr(fd);
     else
         assert(0);
 
@@ -169,18 +180,17 @@ _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e)
     lt_tmp = RB_INSERT(lthread_rb_wait, &lt->sched->waiting, lt);
     assert(lt_tmp == NULL);
     _lthread_yield(lt);
-    clear_rd_wr_state(lt);
 }
 
-void
-clear_rd_wr_state(struct lthread *lt)
+static inline void
+_lthread_clear_rd_wr_state(struct lthread *lt)
 {
     if (lt->fd_wait >= 0) {
         //printf("%llu state is %d\n", lt->id, lt->state);
-        if (lt->state & bit(LT_WAIT_READ)) {
-            lt->state &= clearbit(LT_WAIT_READ);
-        } else if (lt->state & bit(LT_WAIT_WRITE)) {
-            lt->state &= clearbit(LT_WAIT_WRITE);
+        if (lt->state & BIT(LT_WAIT_READ)) {
+            lt->state &= CLEARBIT(LT_WAIT_READ);
+        } else if (lt->state & BIT(LT_WAIT_WRITE)) {
+            lt->state &= CLEARBIT(LT_WAIT_WRITE);
         } else {
             printf("lt->state is %d\n", lt->state);
             assert(0);
@@ -201,7 +211,7 @@ _lthread_poll(void)
     sched = lthread_get_sched();
 
     sched->num_new_events = 0;
-    usecs = _min_timeout(sched);
+    usecs = _lthread_min_timeout(sched);
 
     /* never sleep if we have an lthread pending in the new queue */
     if (usecs && TAILQ_EMPTY(&sched->ready)) {
@@ -212,7 +222,7 @@ _lthread_poll(void)
             t.tv_nsec = usecs * 1000u;
     }
 
-    ret = poll_events(t);
+    ret = _lthread_poller_poll(t);
 
     if (ret == -1) {
         perror("error adding events to kevent");
@@ -222,24 +232,24 @@ _lthread_poll(void)
     sched->nevents = 0;
     sched->num_new_events = ret;
 
-    return 0;
+    return (0);
 }
 
 void
-_desched_lthread(struct lthread *lt)
+_lthread_desched(struct lthread *lt)
 {
     struct lthread *lt_tmp = NULL;
 
-    if (lt->state & bit(LT_SLEEPING)) {
+    if (lt->state & BIT(LT_SLEEPING)) {
         RB_REMOVE(lthread_rb_sleep, &lt->sched->sleeping, lt_tmp);
-        lt->state &= clearbit(LT_SLEEPING);
-        lt->state |= bit(LT_READY);
-        lt->state &= clearbit(LT_EXPIRED);
+        lt->state &= CLEARBIT(LT_SLEEPING);
+        lt->state |= BIT(LT_READY);
+        lt->state &= CLEARBIT(LT_EXPIRED);
     }
 }
 
 int
-_sched_lthread(struct lthread *lt, uint64_t msecs)
+_lthread_sched(struct lthread *lt, uint64_t msecs)
 {
     struct lthread *lt_tmp = NULL;
     uint64_t t_diff_usecs = 0;
@@ -254,15 +264,15 @@ _sched_lthread(struct lthread *lt, uint64_t msecs)
             t_diff_usecs++;
             continue;
         }
-        lt->state |= bit(LT_SLEEPING);
+        lt->state |= BIT(LT_SLEEPING);
         break;
     }
 
-    return 0;
+    return (0);
 }
 
 static uint64_t
-_min_timeout(struct lthread_sched *sched)
+_lthread_min_timeout(struct lthread_sched *sched)
 {
     uint64_t t_diff_usecs = 0, min = 0;
     struct lthread *lt = NULL;
@@ -272,19 +282,19 @@ _min_timeout(struct lthread_sched *sched)
 
     lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);
     if (!lt)
-        return min;
+        return (min);
 
     min = lt->sleep_usecs;
     if (min > t_diff_usecs)
         return (min - t_diff_usecs);
     else // we are running late on a thread, execute immediately
-        return 0;
+        return (0);
 
-    return 0;
+    return (0);
 }
 
 static void
-_resume_expired_lthreads(struct lthread_sched *sched)
+_lthread_resume_expired(struct lthread_sched *sched)
 {
     struct lthread *lt = NULL;
     struct lthread *lt_tmp = NULL;
@@ -295,19 +305,28 @@ _resume_expired_lthreads(struct lthread_sched *sched)
 
     RB_FOREACH_SAFE(lt, lthread_rb_sleep, &sched->sleeping, lt_tmp) {
         if (lt->sleep_usecs <= t_diff_usecs) {
-            RB_REMOVE(lthread_rb_sleep, &sched->sleeping, lt);
-            lt->state &= clearbit(LT_SLEEPING);
             if (lt->fd_wait >= 0) {
+                /* lthread was waiting on an fd - remove it from tree */
+                _lthread_remove_waiting_on(
+                    FD_ONLY(lt->fd_wait), FD_EVENT(lt->fd_wait));
+
+                /* remove event from poller */
                 if (FD_EVENT(lt->fd_wait) == LT_WRITE)
-                    clear_wr_interest(FD_ONLY(lt->fd_wait));
+                    _lthread_poller_ev_clear_wr(FD_ONLY(lt->fd_wait));
                 else if (FD_EVENT(lt->fd_wait) == LT_READ)
-                    clear_rd_interest(FD_ONLY(lt->fd_wait));
+                    _lthread_poller_ev_clear_rd(FD_ONLY(lt->fd_wait));
                 else
                     assert(0); /* impossible state */
-                RB_REMOVE(lthread_rb_wait, &sched->waiting, lt);
+
+            } else {
+                /* this lthread was just sleeping and it woke up */
+                _lthread_desched(lt);
             }
+
+            /* if lthread is detached and got freed then lt becomes NULL */
             if (_lthread_resume(lt) != -1)
-                lt->state &= clearbit(LT_EXPIRED);
+                lt->state &= CLEARBIT(LT_EXPIRED);
+
             continue;
         }
 

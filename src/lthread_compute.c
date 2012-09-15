@@ -89,7 +89,7 @@ lthread_compute_begin(void)
 
     lt->compute_sched = compute_sched;
 
-    lt->state |= bit(LT_PENDING_RUNCOMPUTE);
+    lt->state |= BIT(LT_PENDING_RUNCOMPUTE);
     assert(pthread_mutex_lock(&lt->compute_sched->lthreads_mutex) == 0);
     LIST_INSERT_HEAD(&lt->compute_sched->lthreads, lt, compute_next);
     assert(pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex) == 0);
@@ -156,8 +156,8 @@ _lthread_compute_add(struct lthread *lt)
         lt->stack_size);
 
     assert(pthread_mutex_lock(&lt->compute_sched->lthreads_mutex) == 0);
-    lt->state &= clearbit(LT_PENDING_RUNCOMPUTE);
-    lt->state |= bit(LT_RUNCOMPUTE);
+    lt->state &= CLEARBIT(LT_PENDING_RUNCOMPUTE);
+    lt->state |= BIT(LT_RUNCOMPUTE);
     assert(pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex) == 0);
     /* wakeup pthread if it was sleeping */
     assert(pthread_mutex_lock(&lt->compute_sched->run_mutex) == 0);
@@ -282,7 +282,7 @@ _lthread_compute_run(void *arg)
             }
 
             lt = LIST_FIRST(&compute_sched->lthreads);
-            if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
+            if (lt->state & BIT(LT_PENDING_RUNCOMPUTE)) {
                 assert(pthread_mutex_unlock(
                     &compute_sched->lthreads_mutex) == 0);
                 continue;
@@ -308,7 +308,7 @@ _lthread_compute_run(void *arg)
             /* signal the prev scheduler in case it was sleeping in a poll */
             ret = write(lt->sched->compute_pipes[1], "1", 1);
             assert(ret == 1);
-            lt->state &= clearbit(LT_RUNCOMPUTE);
+            lt->state &= CLEARBIT(LT_RUNCOMPUTE);
         }
 
         assert(pthread_mutex_lock(&compute_sched->run_mutex) == 0);

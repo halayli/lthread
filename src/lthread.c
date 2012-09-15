@@ -117,7 +117,7 @@ _exec(void *lt)
   __asm__ ("movq 16(%%rbp), %[lt]" : [lt] "=r" (lt));
 #endif
     ((struct lthread *)lt)->fun(((struct lthread *)lt)->arg);
-    ((struct lthread *)lt)->state |= bit(LT_EXITED);
+    ((struct lthread *)lt)->state |= BIT(LT_EXITED);
 
     _lthread_yield(lt);
 }
@@ -139,21 +139,21 @@ _lthread_free(struct lthread *lt)
 int
 _lthread_resume(struct lthread *lt)
 {
-    if (lt->state & bit(LT_CANCELLED)) {
+    if (lt->state & BIT(LT_CANCELLED)) {
         /* if an lthread was joining on it, schedule it to run */
         if (lt->lt_join) {
-            _desched_lthread(lt->lt_join);
+            _lthread_desched(lt->lt_join);
             TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt->lt_join,
                 ready_next);
             lt->lt_join = NULL;
         }
         /* if lthread is detached, then we can free it up */
-        if (lt->state & bit(LT_DETACH))
+        if (lt->state & BIT(LT_DETACH))
             _lthread_free(lt);
-        return 0;
+        return (0);
     }
 
-    if (lt->state & bit(LT_NEW))
+    if (lt->state & BIT(LT_NEW))
         _lthread_init(lt);
 
     _restore_exec_state(lt);
@@ -162,28 +162,28 @@ _lthread_resume(struct lthread *lt)
     _switch(&lt->ctx, &lt->sched->ctx);
     lthread_get_sched()->current_lthread = NULL;
 
-    if (lt->state & bit(LT_EXITED)) {
+    if (lt->state & BIT(LT_EXITED)) {
         if (lt->lt_join) {
             /* if lthread was sleeping, deschedule it so it doesn't expire. */
-            _desched_lthread(lt->lt_join);
+            _lthread_desched(lt->lt_join);
             TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt->lt_join,
                 ready_next);
             lt->lt_join = NULL;
         }
 
         /* if lthread is detached, free it, otherwise lthread_join() will */
-        if (lt->state & bit(LT_DETACH))
+        if (lt->state & BIT(LT_DETACH))
             _lthread_free(lt);
-        return -1;
+        return (-1);
     } else {
         _save_exec_state(lt);
         /* place it in a compute scheduler if needed. */
-        if (lt->state & bit(LT_PENDING_RUNCOMPUTE)) {
+        if (lt->state & BIT(LT_PENDING_RUNCOMPUTE)) {
             _lthread_compute_add(lt);
         }
     }
 
-    return 0;
+    return (0);
 }
 
 static void
@@ -205,7 +205,7 @@ _lthread_key_create(void)
 int
 lthread_init(size_t size)
 {
-    return sched_create(size);
+    return (sched_create(size));
 }
 
 static void
@@ -219,7 +219,7 @@ _lthread_init(struct lthread *lt)
     lt->ctx.esp = (void *)stack - (4 * sizeof(void *));
     lt->ctx.ebp = (void *)stack - (3 * sizeof(void *));
     lt->ctx.eip = (void *)_exec;
-    lt->state = bit(LT_READY);
+    lt->state = BIT(LT_READY);
 }
 
 inline int
@@ -228,7 +228,7 @@ _restore_exec_state(struct lthread *lt)
     if (lt->stack_size)
         memcpy(lt->ctx.esp, lt->stack, lt->stack_size);
 
-    return 0;
+    return (0);
 }
 
 int
@@ -253,12 +253,13 @@ _save_exec_state(struct lthread *lt)
     if (size)
         memcpy(lt->stack, lt->ctx.esp, size);
 
-    return 0;
+    return (0);
 }
 
 void
 _sched_free(struct lthread_sched *sched)
 {
+    close(sched->poller_fd);
     free(sched->stack);
     assert(pthread_mutex_destroy(&sched->compute_mutex) == 0);
     free(sched);
@@ -275,7 +276,7 @@ sched_create(size_t stack_size)
 
     if ((new_sched = calloc(1, sizeof(struct lthread_sched))) == NULL) {
         perror("Failed to initialize scheduler\n");
-        return errno;
+        return (errno);
     }
 
     assert(pthread_setspecific(lthread_sched_key, new_sched) == 0);
@@ -283,27 +284,27 @@ sched_create(size_t stack_size)
     if ((new_sched->stack = calloc(1, sched_stack_size)) == NULL) {
         free(new_sched);
         perror("Failed to initialize scheduler\n");
-        return errno;
+        return (errno);
     }
 
     bzero(new_sched->stack, sched_stack_size);
 
-    if ((new_sched->poller_fd = create_poller()) == -1) {
+    if ((new_sched->poller_fd = _lthread_poller_create()) == -1) {
         perror("Failed to initialize poller\n");
         _sched_free(new_sched);
-        return errno;
+        return (errno);
     }
 
     if (pthread_mutex_init(&new_sched->compute_mutex, NULL) != 0) {
         perror("Failed to initialize compute_mutex\n");
         _sched_free(new_sched);
-        return errno;
+        return (errno);
     }
 
     if (pipe(new_sched->compute_pipes) == -1) {
         perror("Failed to initialize pipe\n");
         _sched_free(new_sched);
-        return errno;
+        return (errno);
     }
 
     new_sched->stack_size = sched_stack_size;
@@ -317,7 +318,7 @@ sched_create(size_t stack_size)
 
     bzero(&new_sched->ctx, sizeof(struct cpu_ctx));
 
-    return 0;
+    return (0);
 }
 
 int
@@ -332,18 +333,18 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
         sched = lthread_get_sched();
         if (sched == NULL) {
             perror("Failed to create scheduler");
-            return -1;
+            return (-1);
         }
     }
 
     if ((lt = calloc(1, sizeof(struct lthread))) == NULL) {
         perror("Failed to allocate memory for new lthread");
-        return errno;
+        return (errno);
     }
 
     lt->sched = sched;
     lt->stack_size = 0;
-    lt->state = bit(LT_NEW);
+    lt->state = BIT(LT_NEW);
     lt->id = sched->spawned_lthreads++;
     lt->fun = fun;
     lt->fd_wait = -1;
@@ -352,7 +353,7 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
     *new_lt = lt;
     TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 
-    return 0;
+    return (0);
 }
 
 void
@@ -364,13 +365,13 @@ lthread_set_data(void *data)
 void *
 lthread_get_data(void)
 {
-    return lthread_get_sched()->current_lthread->data;
+    return (lthread_get_sched()->current_lthread->data);
 }
 
 struct lthread*
 lthread_current(void)
 {
-    return lthread_get_sched()->current_lthread;
+    return (lthread_get_sched()->current_lthread);
 }
 
 void
@@ -379,14 +380,14 @@ lthread_cancel(struct lthread *lt)
     if (lt == NULL)
         return;
 
-    lt->state |= bit(LT_CANCELLED);
+    lt->state |= BIT(LT_CANCELLED);
     /*
      * we don't schedule the cancelled lthread if it was running in a compute
      * scheduler or pending to run in a compute scheduler. otherwise it could
      * get freed while it's still running.
      */
-    if (lt->state & bit(LT_PENDING_RUNCOMPUTE) ||
-        lt->state & bit(LT_RUNCOMPUTE))
+    if (lt->state & BIT(LT_PENDING_RUNCOMPUTE) ||
+        lt->state & BIT(LT_RUNCOMPUTE))
         return;
     TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 }
@@ -395,11 +396,11 @@ int
 lthread_cond_create(struct lthread_cond **c)
 {
     if ((*c = calloc(1, sizeof(struct lthread_cond))) == NULL)
-        return -1;
+        return (-1);
 
     TAILQ_INIT(&(*c)->blocked_lthreads);
 
-    return 0;
+    return (0);
 }
 
 int
@@ -408,20 +409,20 @@ lthread_cond_wait(struct lthread_cond *c, uint64_t timeout)
     struct lthread *lt = lthread_get_sched()->current_lthread;
     TAILQ_INSERT_TAIL(&c->blocked_lthreads, lt, cond_next);
     if (timeout)
-        _sched_lthread(lt, timeout);
+        _lthread_sched(lt, timeout);
 
-    lt->state |= bit(LT_LOCKED);
+    lt->state |= BIT(LT_LOCKED);
     _lthread_yield(lt);
-    lt->state &= clearbit(LT_LOCKED);
+    lt->state &= CLEARBIT(LT_LOCKED);
 
-    if (lt->state & bit(LT_EXPIRED)) {
+    if (lt->state & BIT(LT_EXPIRED)) {
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
-        return -2;
+        return (-2);
     } else {
-        _desched_lthread(lt);
+        _lthread_desched(lt);
     }
 
-    return 0;
+    return (0);
 }
 
 void
@@ -431,7 +432,7 @@ lthread_cond_signal(struct lthread_cond *c)
     if (lt == NULL)
         return;
     TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
-    _desched_lthread(lt);
+    _lthread_desched(lt);
     TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
 }
 
@@ -443,7 +444,7 @@ lthread_cond_broadcast(struct lthread_cond *c)
 
     TAILQ_FOREACH_SAFE(lt, &c->blocked_lthreads, cond_next, lttmp) {
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
-        _desched_lthread(lt);
+        _lthread_desched(lt);
         TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
     }
 }
@@ -453,11 +454,8 @@ lthread_sleep(uint64_t msecs)
 {
     struct lthread *lt = lthread_get_sched()->current_lthread;
     lt->fd_wait = -1;
-    if (_sched_lthread(lt, msecs) == -1) {
-        lt->state = bit(LT_READY);
-        return;
-    }
-    lt->state |= bit(LT_SLEEPING);
+    _lthread_sched(lt, msecs);
+    lt->state |= BIT(LT_SLEEPING);
     _lthread_yield(lt);
 }
 
@@ -487,9 +485,9 @@ _lthread_wait_cmp(struct lthread *l1, struct lthread *l2)
 void
 lthread_wakeup(struct lthread *lt)
 {
-    if (lt->state & bit(LT_SLEEPING)) {
+    if (lt->state & BIT(LT_SLEEPING)) {
         TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
-        _desched_lthread(lt);
+        _lthread_desched(lt);
     }
 }
 
@@ -500,7 +498,7 @@ lthread_exit(void *ptr)
     if (current->lt_join && current->lt_join->lt_exit_ptr && ptr)
         *(current->lt_join->lt_exit_ptr) = ptr;
 
-    current->state |= bit(LT_EXITED);
+    current->state |= BIT(LT_EXITED);
     _lthread_yield(current);
 }
 
@@ -513,32 +511,32 @@ lthread_join(struct lthread *lt, void **ptr, uint64_t timeout)
     int ret = 0;
 
     /* abort if the lthread has exited already */
-    if (lt->state & bit(LT_EXITED))
-        return -1;
+    if (lt->state & BIT(LT_EXITED))
+        return (-1);
 
     if (timeout)
-        _sched_lthread(current, timeout);
+        _lthread_sched(current, timeout);
 
     _lthread_yield(current);
 
-    if (current->state & bit(LT_EXPIRED)) {
+    if (current->state & BIT(LT_EXPIRED)) {
         lt->lt_join = NULL;
-        return -2;
+        return (-2);
     }
 
-    if (lt->state & bit(LT_CANCELLED))
+    if (lt->state & BIT(LT_CANCELLED))
         ret = -1;
 
     _lthread_free(lt);
 
-    return ret;
+    return (ret);
 }
 
 inline void
 lthread_detach(void)
 {
     struct lthread *current = lthread_get_sched()->current_lthread;
-    current->state |= bit(LT_DETACH);
+    current->state |= BIT(LT_DETACH);
 }
 
 void
@@ -551,5 +549,5 @@ lthread_set_funcname(const char *f)
 uint64_t
 lthread_id(void)
 {
-    return lthread_get_sched()->current_lthread->id;
+    return (lthread_get_sched()->current_lthread->id);
 }

@@ -43,8 +43,8 @@
 #define LT_MAX_EVENTS    (1024)
 #define MAX_STACK_SIZE (4*1024*1024)
 
-#define bit(x) (1 << (x))
-#define clearbit(x) ~(1 << (x))
+#define BIT(x) (1 << (x))
+#define CLEARBIT(x) ~(1 << (x))
 
 struct lthread;
 struct lthread_sched;
@@ -130,16 +130,11 @@ struct lthread {
 
 RB_HEAD(lthread_rb_sleep, lthread);
 RB_HEAD(lthread_rb_wait, lthread);
+RB_PROTOTYPE(lthread_rb_wait, lthread, wait_node, _lthread_wait_cmp);
 
 struct lthread_cond {
     struct lthread_q blocked_lthreads;
 };
-
-#if defined(__FreeBSD__) || defined(__APPLE__)
-    #define POLL_EVENT_TYPE struct kevent
-#else
-    #define POLL_EVENT_TYPE struct epoll_event
-#endif
 
 struct lthread_sched {
     uint64_t            birth;
@@ -178,23 +173,25 @@ struct lthread_compute_sched {
     enum lthread_compute_st compute_st;
 };
 
-int     _lthread_resume(struct lthread *lt);
-inline void    _lthread_renice(struct lthread *lt);
-void    _sched_free(struct lthread_sched *sched);
-void    _lthread_del_event(struct lthread *lt);
-
-void    _lthread_yield(struct lthread *lt);
-void    _lthread_free(struct lthread *lt);
-void    _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e);
-int     _sched_lthread(struct lthread *lt,  uint64_t usecs);
-void    _desched_lthread(struct lthread *lt);
-void    clear_rd_wr_state(struct lthread *lt);
-inline int _restore_exec_state(struct lthread *lt);
-int     _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
 int     sched_create(size_t stack_size);
-int     _save_exec_state(struct lthread *lt);
 
-void    _lthread_compute_add(struct lthread *lt);
+int         _lthread_resume(struct lthread *lt);
+inline void _lthread_renice(struct lthread *lt);
+void        _sched_free(struct lthread_sched *sched);
+void        _lthread_del_event(struct lthread *lt);
+
+void        _lthread_yield(struct lthread *lt);
+void        _lthread_free(struct lthread *lt);
+void        _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e);
+struct lthread* _lthread_remove_waiting_on(int fd, enum lthread_event e);
+int         _lthread_sched(struct lthread *lt,  uint64_t usecs);
+void        _lthread_desched(struct lthread *lt);
+
+inline int _restore_exec_state(struct lthread *lt);
+int         _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
+int         _save_exec_state(struct lthread *lt);
+
+void        _lthread_compute_add(struct lthread *lt);
 
 extern pthread_key_t lthread_sched_key;
 

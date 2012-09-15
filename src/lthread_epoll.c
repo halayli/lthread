@@ -46,7 +46,7 @@ register_rd_interest(int fd)
 
     /* compute sched can have a NULL current_ltread */ 
     if (sched->current_lthread != NULL)
-        lt->state |= bit(LT_WAIT_READ);
+        lt->state |= BIT(LT_WAIT_READ);
 }
 
 inline void
@@ -64,7 +64,7 @@ register_wr_interest(int fd)
     assert(ret != -1);
 
     if (sched->lt != NULL)
-        lt->state |= bit(LT_WAIT_WRITE);
+        lt->state |= BIT(LT_WAIT_WRITE);
 }
 
 inline void

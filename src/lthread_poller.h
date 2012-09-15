@@ -23,7 +23,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- * poller.h
+ * lthread_poller.h
  */
 
 
@@ -32,29 +32,23 @@
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
 #include <sys/event.h>
+#define POLL_EVENT_TYPE struct kevent
 #else
 #include <sys/epoll.h>
+#define POLL_EVENT_TYPE struct epoll_event
 #endif
 
-inline void register_rd_interest(int fd);
-inline void register_wr_interest(int fd);
-inline void clear_wr_interest(int fd);
-inline void clear_rd_interest(int fd);
-int create_poller(void);
-inline int poll_events(struct timespec t);
+int _lthread_poller_create(void);
+inline int _lthread_poller_poll(struct timespec t);
+inline void _lthread_poller_ev_register_rd(int fd);
+inline void _lthread_poller_ev_register_wr(int fd);
+inline void _lthread_poller_ev_clear_wr(int fd);
+inline void _lthread_poller_ev_clear_rd(int fd);
 
-#if defined(__FreeBSD__) || defined(__APPLE__)
-inline int get_event(struct kevent *ev);
-inline int get_fd(struct kevent *ev);
-inline int is_eof(struct kevent *ev);
-inline int is_read(struct kevent *ev);
-inline int is_write(struct kevent *ev);
-#else
-inline int get_event(struct epoll_event *ev);
-inline int get_fd(struct epoll_event *ev);
-inline int is_eof(struct epoll_event *ev);
-inline int is_read(struct epoll_event *ev);
-inline int is_write(struct epoll_event *ev);
-#endif
+inline int _lthread_poller_ev_get_event(POLL_EVENT_TYPE *ev);
+inline int _lthread_poller_ev_get_fd(POLL_EVENT_TYPE *ev);
+inline int _lthread_poller_ev_is_eof(POLL_EVENT_TYPE *ev);
+inline int _lthread_poller_ev_is_read(POLL_EVENT_TYPE *ev);
+inline int _lthread_poller_ev_is_write(POLL_EVENT_TYPE *ev);
 
 #endif
