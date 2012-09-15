@@ -58,6 +58,20 @@ _lthread_poller_poll(struct timespec t)
 }
 
 inline void
+_lthread_poller_ev_clear_rd(int fd)
+{
+    struct kevent change;
+    struct kevent event;
+    struct timespec tm = {0, 0};
+    int ret = 0;
+    struct lthread_sched *sched = lthread_get_sched();
+
+    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+    ret = kevent(sched->poller_fd, &change, 1, &event, 0, &tm);
+    assert(ret == 1);
+}
+
+inline void
 _lthread_poller_ev_clear_wr(int fd)
 {
     struct kevent change;
@@ -92,20 +106,6 @@ _lthread_poller_ev_register_wr(int fd)
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_WRITE,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
     sched->current_lthread->state |= BIT(LT_WAIT_WRITE);
-}
-
-inline void
-_lthread_poller_ev_clear_rd(int fd)
-{
-    struct kevent change;
-    struct kevent event;
-    struct timespec tm = {0, 0};
-    int ret = 0;
-    struct lthread_sched *sched = lthread_get_sched();
-
-    EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-    ret = kevent(sched->poller_fd, &change, 1, &event, 0, &tm);
-    assert(ret == 1);
 }
 
 inline int
