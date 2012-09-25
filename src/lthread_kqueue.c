@@ -93,8 +93,6 @@ _lthread_poller_ev_register_rd(int fd)
         _lthread_poller_flush_events();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_READ,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
-    if (sched->current_lthread)
-        sched->current_lthread->state |= BIT(LT_WAIT_READ);
 }
 
 inline void
@@ -105,7 +103,6 @@ _lthread_poller_ev_register_wr(int fd)
         _lthread_poller_flush_events();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_WRITE,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
-    sched->current_lthread->state |= BIT(LT_WAIT_WRITE);
 }
 
 inline int

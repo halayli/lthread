@@ -39,10 +39,10 @@ _lthread_poller_create(void)
 inline int
 _lthread_poller_poll(struct timespec t)
 {
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
 
     return (epoll_wait(sched->poller_fd, sched->eventlist, LT_MAX_EVENTS,
-        t.tv_sec*1000 + t.tv_nsec/1000000));
+        t.tv_sec*1000.0 + t.tv_nsec/1000000.0));
 }
 
 inline void
@@ -50,7 +50,7 @@ _lthread_poller_ev_clear_rd(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
 
     ev.data.fd = fd;
     ev.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
@@ -63,7 +63,7 @@ _lthread_poller_ev_clear_wr(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
 
     ev.data.fd = fd;
     ev.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
@@ -76,7 +76,7 @@ _lthread_poller_ev_register_rd(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
 
     ev.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
@@ -84,10 +84,6 @@ _lthread_poller_ev_register_rd(int fd)
     if (ret < 0)
         ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_ADD, fd, &ev);
     assert(ret != -1);
-
-    /* compute sched can have a NULL current_ltread */ 
-    if (sched->current_lthread != NULL)
-        lt->state |= BIT(LT_WAIT_READ);
 }
 
 inline void
@@ -95,7 +91,7 @@ _lthread_poller_ev_register_wr(int fd)
 {
     struct epoll_event ev;
     int ret = 0;
-    sched_t *sched = lthread_get_sched();
+    struct lthread_sched *sched = lthread_get_sched();
 
     ev.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
     ev.data.fd = fd;
@@ -103,9 +99,6 @@ _lthread_poller_ev_register_wr(int fd)
     if (ret < 0)
         ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_ADD, fd, &ev);
     assert(ret != -1);
-
-    if (sched->lt != NULL)
-        lt->state |= BIT(LT_WAIT_WRITE);
 }
 
 inline int

@@ -11,3 +11,11 @@ set_property(SOURCE ${lthread_files} PROPERTY COMPILE_FLAGS "-O2")
 
 install (TARGETS lthread DESTINATION lib)
 install (FILES src/lthread.h DESTINATION include)
+
+set(UNIT_TEST_PATH ${CMAKE_SOURCE_DIR}/tests)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${UNIT_TEST_PATH})
+add_executable(lthread_basic tests/lthread_basic.c)
+target_link_libraries(lthread_basic lthread pthread)
+
+enable_testing()
+add_test(lthread_basic ${UNIT_TEST_PATH}/lthread_basic)

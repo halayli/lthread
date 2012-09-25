@@ -117,7 +117,7 @@ _exec(void *lt)
   __asm__ ("movq 16(%%rbp), %[lt]" : [lt] "=r" (lt));
 #endif
     ((struct lthread *)lt)->fun(((struct lthread *)lt)->arg);
-    ((struct lthread *)lt)->state |= BIT(LT_EXITED);
+    ((struct lthread *)lt)->state |= BIT(LT_ST_EXITED);
 
     _lthread_yield(lt);
 }
@@ -142,20 +142,20 @@ _lthread_resume(struct lthread *lt)
 
     struct lthread_sched *sched = lthread_get_sched();
 
-    if (lt->state & BIT(LT_CANCELLED)) {
+    if (lt->state & BIT(LT_ST_CANCELLED)) {
         /* if an lthread was joining on it, schedule it to run */
         if (lt->lt_join) {
-            _lthread_desched(lt->lt_join);
+            _lthread_desched_sleep(lt->lt_join);
             TAILQ_INSERT_TAIL(&sched->ready, lt->lt_join, ready_next);
             lt->lt_join = NULL;
         }
         /* if lthread is detached, then we can free it up */
-        if (lt->state & BIT(LT_DETACH))
+        if (lt->state & BIT(LT_ST_DETACH))
             _lthread_free(lt);
         return (-1);
     }
 
-    if (lt->state & BIT(LT_NEW))
+    if (lt->state & BIT(LT_ST_NEW))
         _lthread_init(lt);
 
     _restore_exec_state(lt);
@@ -164,22 +164,22 @@ _lthread_resume(struct lthread *lt)
     _switch(&lt->ctx, &lt->sched->ctx);
     sched->current_lthread = NULL;
 
-    if (lt->state & BIT(LT_EXITED)) {
+    if (lt->state & BIT(LT_ST_EXITED)) {
         if (lt->lt_join) {
             /* if lthread was sleeping, deschedule it so it doesn't expire. */
-            _lthread_desched(lt->lt_join);
+            _lthread_desched_sleep(lt->lt_join);
             TAILQ_INSERT_TAIL(&sched->ready, lt->lt_join, ready_next);
             lt->lt_join = NULL;
         }
 
         /* if lthread is detached, free it, otherwise lthread_join() will */
-        if (lt->state & BIT(LT_DETACH))
+        if (lt->state & BIT(LT_ST_DETACH))
             _lthread_free(lt);
         return (-1);
     } else {
         _save_exec_state(lt);
         /* place it in a compute scheduler if needed. */
-        if (lt->state & BIT(LT_PENDING_RUNCOMPUTE)) {
+        if (lt->state & BIT(LT_ST_PENDING_RUNCOMPUTE)) {
             _lthread_compute_add(lt);
         }
     }
@@ -220,7 +220,7 @@ _lthread_init(struct lthread *lt)
     lt->ctx.esp = (void *)stack - (4 * sizeof(void *));
     lt->ctx.ebp = (void *)stack - (3 * sizeof(void *));
     lt->ctx.eip = (void *)_exec;
-    lt->state = BIT(LT_READY);
+    lt->state = BIT(LT_ST_READY);
 }
 
 inline int
@@ -345,7 +345,7 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
 
     lt->sched = sched;
     lt->stack_size = 0;
-    lt->state = BIT(LT_NEW);
+    lt->state = BIT(LT_ST_NEW);
     lt->id = sched->spawned_lthreads++;
     lt->fun = fun;
     lt->fd_wait = -1;
@@ -381,7 +381,9 @@ lthread_cancel(struct lthread *lt)
     if (lt == NULL)
         return;
 
-    lt->state |= BIT(LT_CANCELLED);
+    lt->state |= BIT(LT_ST_CANCELLED);
+    _lthread_desched_sleep(lt);
+    _lthread_cancel_event(lt);
     /*
      * we don't schedule the cancelled lthread if it was running in a compute
      * scheduler or pending to run in a compute scheduler. otherwise it could
@@ -389,8 +391,8 @@ lthread_cancel(struct lthread *lt)
      * when it's done in compute_scheduler - the scheduler will attempt to run
      * it and realize it's cancelled and abort the resumption.
      */
-    if (lt->state & BIT(LT_PENDING_RUNCOMPUTE) ||
-        lt->state & BIT(LT_RUNCOMPUTE))
+    if (lt->state & BIT(LT_ST_PENDING_RUNCOMPUTE) ||
+        lt->state & BIT(LT_ST_RUNCOMPUTE))
         return;
     TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 }
@@ -411,18 +413,14 @@ lthread_cond_wait(struct lthread_cond *c, uint64_t timeout)
 {
     struct lthread *lt = lthread_get_sched()->current_lthread;
     TAILQ_INSERT_TAIL(&c->blocked_lthreads, lt, cond_next);
-    if (timeout)
-        _lthread_sched(lt, timeout);
 
-    lt->state |= BIT(LT_LOCKED);
-    _lthread_yield(lt);
-    lt->state &= CLEARBIT(LT_LOCKED);
+    lt->state |= BIT(LT_ST_LOCKED);
+    _lthread_sched_sleep(lt, timeout);
+    lt->state &= CLEARBIT(LT_ST_LOCKED);
 
-    if (lt->state & BIT(LT_EXPIRED)) {
+    if (lt->state & BIT(LT_ST_EXPIRED)) {
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
         return (-2);
-    } else {
-        _lthread_desched(lt);
     }
 
     return (0);
@@ -435,7 +433,7 @@ lthread_cond_signal(struct lthread_cond *c)
     if (lt == NULL)
         return;
     TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
-    _lthread_desched(lt);
+    _lthread_desched_sleep(lt);
     TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
 }
 
@@ -447,7 +445,7 @@ lthread_cond_broadcast(struct lthread_cond *c)
 
     TAILQ_FOREACH_SAFE(lt, &c->blocked_lthreads, cond_next, lttmp) {
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
-        _lthread_desched(lt);
+        _lthread_desched_sleep(lt);
         TAILQ_INSERT_TAIL(&lthread_get_sched()->ready, lt, ready_next);
     }
 }
@@ -456,10 +454,7 @@ void
 lthread_sleep(uint64_t msecs)
 {
     struct lthread *lt = lthread_get_sched()->current_lthread;
-    lt->fd_wait = -1;
-    _lthread_sched(lt, msecs);
-    lt->state |= BIT(LT_SLEEPING);
-    _lthread_yield(lt);
+    _lthread_sched_sleep(lt, msecs);
 }
 
 inline void
@@ -488,9 +483,9 @@ _lthread_wait_cmp(struct lthread *l1, struct lthread *l2)
 void
 lthread_wakeup(struct lthread *lt)
 {
-    if (lt->state & BIT(LT_SLEEPING)) {
+    if (lt->state & BIT(LT_ST_SLEEPING)) {
         TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
-        _lthread_desched(lt);
+        _lthread_desched_sleep(lt);
     }
 }
 
@@ -501,7 +496,7 @@ lthread_exit(void *ptr)
     if (current->lt_join && current->lt_join->lt_exit_ptr && ptr)
         *(current->lt_join->lt_exit_ptr) = ptr;
 
-    current->state |= BIT(LT_EXITED);
+    current->state |= BIT(LT_ST_EXITED);
     _lthread_yield(current);
 }
 
@@ -514,20 +509,17 @@ lthread_join(struct lthread *lt, void **ptr, uint64_t timeout)
     int ret = 0;
 
     /* fail if the lthread has exited already */
-    if (lt->state & BIT(LT_EXITED))
+    if (lt->state & BIT(LT_ST_EXITED))
         return (-1);
 
-    if (timeout)
-        _lthread_sched(current, timeout);
+    _lthread_sched_sleep(current, timeout);
 
-    _lthread_yield(current);
-
-    if (current->state & BIT(LT_EXPIRED)) {
+    if (current->state & BIT(LT_ST_EXPIRED)) {
         lt->lt_join = NULL;
         return (-2);
     }
 
-    if (lt->state & BIT(LT_CANCELLED))
+    if (lt->state & BIT(LT_ST_CANCELLED))
         ret = -1;
 
     _lthread_free(lt);
@@ -539,7 +531,7 @@ inline void
 lthread_detach(void)
 {
     struct lthread *current = lthread_get_sched()->current_lthread;
-    current->state |= BIT(LT_DETACH);
+    current->state |= BIT(LT_ST_DETACH);
 }
 
 void

@@ -51,10 +51,66 @@ static uint64_t _lthread_min_timeout(struct lthread_sched *);
 
 static int  _lthread_poll(void);
 static void _lthread_resume_expired(struct lthread_sched *sched);
-static inline void _lthread_clear_rd_wr_state(struct lthread *lt);
 
 static char tmp[100];
 static struct lthread find_lt;
+
+static int
+_lthread_poll(void)
+{
+    struct lthread_sched *sched;
+    struct timespec t = {0, 0};
+    int ret = 0;
+    uint64_t usecs = 0;
+
+    sched = lthread_get_sched();
+
+    sched->num_new_events = 0;
+    usecs = _lthread_min_timeout(sched);
+
+    /* never sleep if we have an lthread pending in the new queue */
+    if (usecs && TAILQ_EMPTY(&sched->ready)) {
+        t.tv_sec =  usecs / 1000000u;
+        if (t.tv_sec != 0)
+            t.tv_nsec  =  (usecs % 1000u)  * 1000000u;
+        else
+            t.tv_nsec = usecs * 1000u;
+    }
+
+    ret = _lthread_poller_poll(t);
+
+    if (ret == -1) {
+        perror("error adding events to kevent");
+        assert(0);
+    }
+
+    sched->nevents = 0;
+    sched->num_new_events = ret;
+
+    return (0);
+}
+
+static uint64_t
+_lthread_min_timeout(struct lthread_sched *sched)
+{
+    uint64_t t_diff_usecs = 0, min = 0;
+    struct lthread *lt = NULL;
+
+    t_diff_usecs = tick_diff_usecs(sched->birth, rdtsc());
+    min = sched->default_timeout;
+
+    lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);
+    if (!lt)
+        return (min);
+
+    min = lt->sleep_usecs;
+    if (min > t_diff_usecs)
+        return (min - t_diff_usecs);
+    else // we are running late on a thread, execute immediately
+        return (0);
+
+    return (0);
+}
 
 void
 lthread_run(void)
@@ -65,6 +121,7 @@ lthread_run(void)
     int p = 0;
     int fd = 0;
     int ret = 0;
+    int is_eof = 0;
     (void)ret; /* silence compiler */
 
     sched = lthread_get_sched();
@@ -119,18 +176,24 @@ lthread_run(void)
                 continue;
             }
 
-            if (_lthread_poller_ev_is_eof(&sched->eventlist[p])) {
-                lt->state |= BIT(LT_FDEOF);
+            is_eof = _lthread_poller_ev_is_eof(&sched->eventlist[p]);
+            if (is_eof)
                 errno = ECONNRESET;
+
+            lt_read = _lthread_desched_event(fd, LT_EV_READ);
+            if (lt_read != NULL) {
+                if (is_eof)
+                    lt_read->state |= BIT(LT_ST_FDEOF);
+                _lthread_resume(lt_read);
             }
 
-            lt_read = _lthread_remove_waiting_on(fd, LT_READ);
-            if (lt_read != NULL)
-                _lthread_resume(lt_read);
-
-            lt_write = _lthread_remove_waiting_on(fd, LT_WRITE);
-            if (lt_write != NULL)
+            lt_write = _lthread_desched_event(fd, LT_EV_WRITE);
+            if (lt_write != NULL) {
+                if (is_eof)
+                    lt_write->state |= BIT(LT_ST_FDEOF);
                 _lthread_resume(lt_write);
+            }
+            is_eof = 0;
 
             assert(lt_write != NULL || lt_read != NULL);
         }
@@ -141,8 +204,35 @@ lthread_run(void)
     return;
 }
 
-struct lthread*
-_lthread_remove_waiting_on(int fd, enum lthread_event e)
+/*
+ * Cancels registered event in poller and deschedules (fd, ev) -> lt from
+ * rbtree. This is safe to be called even if the lthread wasn't waiting on an
+ * event.
+ */
+void
+_lthread_cancel_event(struct lthread *lt)
+{
+    if (lt->state & BIT(LT_ST_WAIT_READ)) {
+        _lthread_poller_ev_clear_rd(FD_ONLY(lt->fd_wait));
+        lt->state &= CLEARBIT(LT_ST_WAIT_READ);
+    } else if (lt->state & BIT(LT_ST_WAIT_WRITE)) {
+        _lthread_poller_ev_clear_wr(FD_ONLY(lt->fd_wait));
+        lt->state &= CLEARBIT(LT_ST_WAIT_WRITE);
+    }
+
+    if (lt->fd_wait >= 0)
+        _lthread_desched_event(FD_ONLY(lt->fd_wait),
+            FD_EVENT(lt->fd_wait));
+    lt->fd_wait = -1;
+}
+
+/*
+ * Deschedules an event by removing the (fd, ev) -> lt node from rbtree.
+ * It also deschedules the lthread from sleeping in case it was in sleeping
+ * tree.
+ */
+struct lthread *
+_lthread_desched_event(int fd, enum lthread_event e)
 {
     struct lthread *lt = NULL;
     struct lthread_sched *sched = lthread_get_sched();
@@ -151,106 +241,75 @@ _lthread_remove_waiting_on(int fd, enum lthread_event e)
     lt = RB_FIND(lthread_rb_wait, &sched->waiting, &find_lt);
     if (lt != NULL) {
         RB_REMOVE(lthread_rb_wait, &lt->sched->waiting, lt);
-        _lthread_desched(lt);
-        _lthread_clear_rd_wr_state(lt);
+        _lthread_desched_sleep(lt);
     }
 
     return (lt);
 }
 
+/*
+ * Schedules an lthread for a poller event.
+ * Sets its state to LT_EV_(READ|WRITE) and inserts lthread in waiting rbtree.
+ * When the event occurs, the state is cleared and node is removed by 
+ * _lthread_desched_event() called from lthread_run().
+ *
+ * If event doesn't occur and lthread expired waiting, _lthread_cancel_event()
+ * must be called.
+ */
 void
-_lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e)
+_lthread_sched_event(struct lthread *lt, int fd, enum lthread_event e,
+    uint64_t timeout)
 {
-    //printf("registering lt %llu for %d\n", lt->id, e);
     struct lthread *lt_tmp = NULL;
-    if (lt->state & BIT(LT_WAIT_READ) ||
-        lt->state & BIT(LT_WAIT_WRITE)) {
+    enum lthread_st st;
+    if (lt->state & BIT(LT_ST_WAIT_READ) || lt->state & BIT(LT_ST_WAIT_WRITE)) {
         printf("Unexpected event. lt id %"PRIu64" fd %ld already in %d state\n",
             lt->id, lt->fd_wait, lt->state);
         assert(0);
     }
 
-    if (e == LT_READ)
+    if (e == LT_EV_READ) {
+        st = LT_ST_WAIT_READ;
         _lthread_poller_ev_register_rd(fd);
-    else if (e == LT_WRITE)
+    } else if (e == LT_EV_WRITE) {
+        st = LT_ST_WAIT_WRITE;
         _lthread_poller_ev_register_wr(fd);
-    else
+    } else
         assert(0);
 
+    lt->state |= BIT(st);
     lt->fd_wait = FD_KEY(fd, e);
     lt_tmp = RB_INSERT(lthread_rb_wait, &lt->sched->waiting, lt);
     assert(lt_tmp == NULL);
-    _lthread_yield(lt);
+    _lthread_sched_sleep(lt, timeout);
+    lt->fd_wait = -1;
+    lt->state &= CLEARBIT(st);
 }
 
-static inline void
-_lthread_clear_rd_wr_state(struct lthread *lt)
-{
-    if (lt->fd_wait >= 0) {
-        //printf("%llu state is %d\n", lt->id, lt->state);
-        if (lt->state & BIT(LT_WAIT_READ)) {
-            lt->state &= CLEARBIT(LT_WAIT_READ);
-        } else if (lt->state & BIT(LT_WAIT_WRITE)) {
-            lt->state &= CLEARBIT(LT_WAIT_WRITE);
-        } else {
-            printf("lt->state is %d\n", lt->state);
-            assert(0);
-        }
-
-        lt->fd_wait = -1;
-    }
-}
-
-static int
-_lthread_poll(void)
-{
-    struct lthread_sched *sched;
-    struct timespec t = {0, 0};
-    int ret = 0;
-    uint64_t usecs = 0;
-
-    sched = lthread_get_sched();
-
-    sched->num_new_events = 0;
-    usecs = _lthread_min_timeout(sched);
-
-    /* never sleep if we have an lthread pending in the new queue */
-    if (usecs && TAILQ_EMPTY(&sched->ready)) {
-        t.tv_sec =  usecs / 1000000u;
-        if (t.tv_sec != 0)
-            t.tv_nsec  =  (usecs % 1000u)  * 1000000u;
-        else
-            t.tv_nsec = usecs * 1000u;
-    }
-
-    ret = _lthread_poller_poll(t);
-
-    if (ret == -1) {
-        perror("error adding events to kevent");
-        assert(0);
-    }
-
-    sched->nevents = 0;
-    sched->num_new_events = ret;
-
-    return (0);
-}
-
+/*
+ * Removes lthread from sleeping rbtree.
+ * This can be called multiple times on the same lthread regardless if it was
+ * sleeping or not.
+ */
 void
-_lthread_desched(struct lthread *lt)
+_lthread_desched_sleep(struct lthread *lt)
 {
-    struct lthread *lt_tmp = NULL;
-
-    if (lt->state & BIT(LT_SLEEPING)) {
-        RB_REMOVE(lthread_rb_sleep, &lt->sched->sleeping, lt_tmp);
-        lt->state &= CLEARBIT(LT_SLEEPING);
-        lt->state |= BIT(LT_READY);
-        lt->state &= CLEARBIT(LT_EXPIRED);
+    if (lt->state & BIT(LT_ST_SLEEPING)) {
+        RB_REMOVE(lthread_rb_sleep, &lt->sched->sleeping, lt);
+        lt->state &= CLEARBIT(LT_ST_SLEEPING);
+        lt->state |= BIT(LT_ST_READY);
+        lt->state &= CLEARBIT(LT_ST_EXPIRED);
+        lt->state &= CLEARBIT(LT_ST_LOCKED);
     }
 }
 
-int
-_lthread_sched(struct lthread *lt, uint64_t msecs)
+/*
+ * Schedules lthread to sleep for `msecs` by inserting lthread into sleeping
+ * rbtree and setting the lthread state to LT_ST_SLEEPING.
+ * lthread state is cleared upon resumption or expiry.
+ */
+void
+_lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
 {
     struct lthread *lt_tmp = NULL;
     uint64_t t_diff_usecs = 0;
@@ -260,40 +319,26 @@ _lthread_sched(struct lthread *lt, uint64_t msecs)
     while (1) {
         /* resolve collision by adding usec until we find a non-existant node */
         lt->sleep_usecs = t_diff_usecs;
+        if (msecs == 0)
+            break;
         lt_tmp = RB_INSERT(lthread_rb_sleep, &lt->sched->sleeping, lt);
         if (lt_tmp) {
             t_diff_usecs++;
             continue;
         }
-        lt->state |= BIT(LT_SLEEPING);
         break;
     }
 
-    return (0);
+    lt->state |= BIT(LT_ST_SLEEPING);
+    _lthread_yield(lt);
+    lt->state &= CLEARBIT(LT_ST_SLEEPING);
 }
 
-static uint64_t
-_lthread_min_timeout(struct lthread_sched *sched)
-{
-    uint64_t t_diff_usecs = 0, min = 0;
-    struct lthread *lt = NULL;
-
-    t_diff_usecs = tick_diff_usecs(sched->birth, rdtsc());
-    min = sched->default_timeout;
-
-    lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);
-    if (!lt)
-        return (min);
-
-    min = lt->sleep_usecs;
-    if (min > t_diff_usecs)
-        return (min - t_diff_usecs);
-    else // we are running late on a thread, execute immediately
-        return (0);
-
-    return (0);
-}
-
+/*
+ * Resumes expired lthread and cancels its events whether it was waiting
+ * on one or not, and deschedules it from sleeping rbtree in case it was
+ * sleeping.
+ */
 static void
 _lthread_resume_expired(struct lthread_sched *sched)
 {
@@ -306,27 +351,13 @@ _lthread_resume_expired(struct lthread_sched *sched)
 
     RB_FOREACH_SAFE(lt, lthread_rb_sleep, &sched->sleeping, lt_tmp) {
         if (lt->sleep_usecs <= t_diff_usecs) {
-            if (lt->fd_wait >= 0) {
-                /* lthread was waiting on an fd - remove it from tree */
-                _lthread_remove_waiting_on(
-                    FD_ONLY(lt->fd_wait), FD_EVENT(lt->fd_wait));
-
-                /* remove event from poller */
-                if (FD_EVENT(lt->fd_wait) == LT_WRITE)
-                    _lthread_poller_ev_clear_wr(FD_ONLY(lt->fd_wait));
-                else if (FD_EVENT(lt->fd_wait) == LT_READ)
-                    _lthread_poller_ev_clear_rd(FD_ONLY(lt->fd_wait));
-                else
-                    assert(0); /* impossible state */
-
-            } else {
-                /* this lthread was just sleeping and it woke up */
-                _lthread_desched(lt);
-            }
+            _lthread_cancel_event(lt);
+            _lthread_desched_sleep(lt);
+            lt->state |= BIT(LT_ST_EXPIRED);
 
             /* no need to clear expired if lthread exited/cancelled */
             if (_lthread_resume(lt) != -1)
-                lt->state &= CLEARBIT(LT_EXPIRED);
+                lt->state &= CLEARBIT(LT_ST_EXPIRED);
 
             continue;
         }

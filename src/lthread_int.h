@@ -41,7 +41,7 @@
 #include "tree.h"
 
 #define LT_MAX_EVENTS    (1024)
-#define MAX_STACK_SIZE (4*1024*1024)
+#define MAX_STACK_SIZE (8*1024*1024)
 
 #define BIT(x) (1 << (x))
 #define CLEARBIT(x) ~(1 << (x))
@@ -74,8 +74,8 @@ struct cpu_ctx {
 };
 
 enum lthread_event {
-    LT_READ,
-    LT_WRITE
+    LT_EV_READ,
+    LT_EV_WRITE
 };
 
 enum lthread_compute_st {
@@ -84,19 +84,19 @@ enum lthread_compute_st {
 };
 
 enum lthread_st {
-    LT_WAIT_READ,   /* lthread waiting for READ on socket */
-    LT_WAIT_WRITE,  /* lthread waiting for WRITE on socket */
-    LT_NEW,         /* lthread spawned but needs initialization */
-    LT_READY,       /* lthread is ready to run */
-    LT_EXITED,      /* lthread has exited and needs cleanup */
-    LT_LOCKED,      /* lthread is locked on a condition */
-    LT_SLEEPING,    /* lthread is sleeping */
-    LT_EXPIRED,     /* lthread has expired and needs to run */
-    LT_FDEOF,       /* lthread socket has shut down */
-    LT_DETACH,      /* lthread will free when it's done, else it wait to join */
-    LT_CANCELLED,   /* lthread has been cancelled */
-    LT_RUNCOMPUTE,  /* lthread needs to run on a compute pthread */
-    LT_PENDING_RUNCOMPUTE, /* lthread needs to run on a compute pthread */
+    LT_ST_WAIT_READ,   /* lthread waiting for READ on socket */
+    LT_ST_WAIT_WRITE,  /* lthread waiting for WRITE on socket */
+    LT_ST_NEW,         /* lthread spawned but needs initialization */
+    LT_ST_READY,       /* lthread is ready to run */
+    LT_ST_EXITED,      /* lthread has exited and needs cleanup */
+    LT_ST_LOCKED,      /* lthread is locked on a condition */
+    LT_ST_SLEEPING,    /* lthread is sleeping */
+    LT_ST_EXPIRED,     /* lthread has expired and needs to run */
+    LT_ST_FDEOF,       /* lthread socket has shut down */
+    LT_ST_DETACH,      /* lthread frees when done, else it waits to join */
+    LT_ST_CANCELLED,   /* lthread has been cancelled */
+    LT_ST_RUNCOMPUTE,  /* lthread needs to run on a compute pthread */
+    LT_ST_PENDING_RUNCOMPUTE, /* lthread needs to run on a compute pthread */
 };
 
 struct lthread {
@@ -116,10 +116,9 @@ struct lthread {
     void                    *stack;         /* ptr to lthread_stack */
     void                    *ebp;           /* saved for compute sched */
     uint32_t                ops;            /* num of ops since yield */
-    uint64_t                sleep_usecs;    /* how long lthread sleep */
-    uint64_t                timeout;        /* how long lthread sleep */
-    RB_ENTRY(lthread)       sleep_node;     /* tree node pointer */
-    RB_ENTRY(lthread)       wait_node;      /* tree node pointer */
+    uint64_t                sleep_usecs;    /* how long lthread is sleeping */
+    RB_ENTRY(lthread)       sleep_node;     /* sleep tree node pointer */
+    RB_ENTRY(lthread)       wait_node;      /* event tree node pointer */
     TAILQ_ENTRY(lthread)    ready_next;     /* ready to run list */
     TAILQ_ENTRY(lthread)    cond_next;      /* waiting on a cond var */
     LIST_ENTRY(lthread)     compute_next;   /* waiting to enter compute */
@@ -173,7 +172,7 @@ struct lthread_compute_sched {
     enum lthread_compute_st compute_st;
 };
 
-int     sched_create(size_t stack_size);
+int         sched_create(size_t stack_size);
 
 int         _lthread_resume(struct lthread *lt);
 inline void _lthread_renice(struct lthread *lt);
@@ -182,15 +181,16 @@ void        _lthread_del_event(struct lthread *lt);
 
 void        _lthread_yield(struct lthread *lt);
 void        _lthread_free(struct lthread *lt);
-void        _lthread_wait_for(struct lthread *lt, int fd, enum lthread_event e);
-struct lthread* _lthread_remove_waiting_on(int fd, enum lthread_event e);
-int         _lthread_sched(struct lthread *lt,  uint64_t usecs);
-void        _lthread_desched(struct lthread *lt);
+void        _lthread_desched_sleep(struct lthread *lt);
+void        _lthread_sched_sleep(struct lthread *lt, uint64_t msecs);
+void        _lthread_cancel_event(struct lthread *lt);
+struct lthread* _lthread_desched_event(int fd, enum lthread_event e);
+void        _lthread_sched_event(struct lthread *lt, int fd,
+    enum lthread_event e, uint64_t timeout);
 
-inline int _restore_exec_state(struct lthread *lt);
+inline int  _restore_exec_state(struct lthread *lt);
 int         _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
 int         _save_exec_state(struct lthread *lt);
-
 void        _lthread_compute_add(struct lthread *lt);
 
 extern pthread_key_t lthread_sched_key;
