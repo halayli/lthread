@@ -34,6 +34,8 @@
 static uint64_t cpu_freq = 1801800000L;
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
+#include <sys/types.h>
+#include <sys/sysctl.h>
 int
 rdtsc_init(void)
 {
@@ -62,7 +64,7 @@ rdtsc_init(void)
     #define MAXLEN 1024
     char line[MAXLEN];
     char *tmp = NULL;
-    int not_found = 1;
+    int found = -1;
 
     if ((fp = fopen("/proc/cpuinfo", "r")) == NULL)
         return (-1);
@@ -70,17 +72,16 @@ rdtsc_init(void)
     while (fgets(line, MAXLEN, fp) != NULL) {
         if ((tmp = strstr(line, "cpu MHz")) != NULL) {
             if ((tmp = strchr(tmp, ':')) != NULL) {
-                not_found = 0;
-                printf("yaay! %s\n", tmp);
+                found = 0;
+                tmp++;
                 cpu_freq = strtod(tmp, NULL) * 1000000u;
                 break;
             }
         }
     }
     fclose(fp);
-    printf("cpu_freq is %lu\n",  cpu_freq);
 
-    return not_found;
+    return found;
 }
 #endif
 
@@ -107,7 +108,16 @@ tick_diff_secs(uint64_t t1, uint64_t t2)
     return (t3/1000000);
 }
 
-uint64_t
+#ifdef __i386__
+inline uint32_t
+rdtsc(void)
+{
+    uint32_t a;
+    __asm__ volatile (".byte 0x0f, 0x31" : "=A" (a));
+    return (a);
+}
+#else
+inline uint64_t
 rdtsc(void)
 {
   uint32_t a = 0, d = 0;
@@ -115,3 +125,4 @@ rdtsc(void)
   asm volatile ("rdtsc" : "=a"(a), "=d"(d));
   return (((uint64_t) d << 32) | a);
 }
+#endif
