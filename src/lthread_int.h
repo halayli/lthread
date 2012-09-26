@@ -51,9 +51,6 @@ struct lthread_sched;
 struct lthread_compute_sched;
 struct lthread_cond;
 
-inline uint64_t _lthread_sleep_cmp(struct lthread *l1, struct lthread *l2);
-inline uint64_t _lthread_wait_cmp(struct lthread *l1, struct lthread *l2);
-
 LIST_HEAD(lthread_l, lthread);
 TAILQ_HEAD(lthread_q, lthread);
 
@@ -109,7 +106,7 @@ struct lthread {
     struct lthread_sched    *sched;         /* scheduler lthread belongs to */
     uint64_t                birth;          /* time lthread was born */
     uint64_t                id;             /* lthread id */
-    int64_t                 fd_wait;        /* fd we are waiting on */
+    uint64_t                fd_wait;        /* fd we are waiting on */
     char                    funcname[64];   /* optional func name */
     struct lthread          *lt_join;       /* lthread we want to join on */
     void                    **lt_exit_ptr;  /* exit ptr for lthread_join */

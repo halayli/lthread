@@ -44,6 +44,29 @@
 #define FD_EVENT(f) ((int32_t)(f))
 #define FD_ONLY(f) ((f) >> ((sizeof(int32_t) * 8)))
 
+static inline int _lthread_sleep_cmp(struct lthread *l1, struct lthread *l2);
+static inline int _lthread_wait_cmp(struct lthread *l1, struct lthread *l2);
+
+static inline int
+_lthread_sleep_cmp(struct lthread *l1, struct lthread *l2)
+{
+    if (l1->sleep_usecs < l2->sleep_usecs)
+        return (-1);
+    if (l1->sleep_usecs == l2->sleep_usecs)
+        return (0);
+    return (1);
+}
+
+static inline int
+_lthread_wait_cmp(struct lthread *l1, struct lthread *l2)
+{
+    if (l1->fd_wait < l2->fd_wait)
+        return (-1);
+    if (l1->fd_wait == l2->fd_wait)
+        return (0);
+    return (1);
+}
+
 RB_GENERATE(lthread_rb_sleep, lthread, sleep_node, _lthread_sleep_cmp);
 RB_GENERATE(lthread_rb_wait, lthread, wait_node, _lthread_wait_cmp);
 
@@ -61,7 +84,7 @@ _lthread_poll(void)
 {
     struct lthread_sched *sched;
     sched = lthread_get_sched();
-    struct timespec t = {0, sched->default_timeout};
+    struct timespec t = {0, 0};
     int ret = 0;
     uint64_t usecs = 0;
 
@@ -342,6 +365,7 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
             t_diff_usecs++;
             continue;
         }
+        lt->state |= BIT(LT_ST_SLEEPING);
         break;
     }
 
@@ -352,7 +376,6 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
     if (msecs == 0)
         LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
 
-    lt->state |= BIT(LT_ST_SLEEPING);
     _lthread_yield(lt);
     if (msecs == 0)
         LIST_REMOVE(lt, busy_next);
@@ -368,13 +391,17 @@ static void
 _lthread_resume_expired(struct lthread_sched *sched)
 {
     struct lthread *lt = NULL;
-    struct lthread *lt_tmp = NULL;
+    //struct lthread *lt_tmp = NULL;
     uint64_t t_diff_usecs = 0;
 
     /* current scheduler time */
     t_diff_usecs = tick_diff_usecs(sched->birth, rdtsc());
 
-    RB_FOREACH_SAFE(lt, lthread_rb_sleep, &sched->sleeping, lt_tmp) {
+    while (1) {
+        lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);
+        if (lt == NULL)
+            break;
+
         if (lt->sleep_usecs <= t_diff_usecs) {
             _lthread_cancel_event(lt);
             _lthread_desched_sleep(lt);
@@ -386,7 +413,6 @@ _lthread_resume_expired(struct lthread_sched *sched)
 
             continue;
         }
-
         break;
     }
 }

@@ -470,18 +470,6 @@ _lthread_renice(struct lthread *lt)
     _lthread_yield(lt);
 }
 
-inline uint64_t
-_lthread_sleep_cmp(struct lthread *l1, struct lthread *l2)
-{
-    return (l2->sleep_usecs - l1->sleep_usecs);
-}
-
-inline uint64_t
-_lthread_wait_cmp(struct lthread *l1, struct lthread *l2)
-{
-    return (l2->fd_wait >> sizeof(int)) - (l1->fd_wait >> sizeof(int));
-}
-
 void
 lthread_wakeup(struct lthread *lt)
 {
@@ -514,9 +502,7 @@ lthread_join(struct lthread *lt, void **ptr, uint64_t timeout)
     if (lt->state & BIT(LT_ST_EXITED))
         return (-1);
 
-    printf("joining before sleep\n");
     _lthread_sched_sleep(current, timeout);
-    printf("joining after sleep\n");
 
     if (current->state & BIT(LT_ST_EXPIRED)) {
         lt->lt_join = NULL;
