@@ -337,7 +337,6 @@ _lthread_desched_sleep(struct lthread *lt)
         lt->state &= CLEARBIT(LT_ST_SLEEPING);
         lt->state |= BIT(LT_ST_READY);
         lt->state &= CLEARBIT(LT_ST_EXPIRED);
-        lt->state &= CLEARBIT(LT_ST_LOCKED);
     }
 }
 
@@ -355,7 +354,7 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
 
     /*
      * if msecs is 0, we won't schedule lthread otherwise loop until
-     * collision resolved(very rare) by incrementing usec by one each time.
+     * collision resolved(very rare) by incrementing usec++.
      */
     while (msecs) {
         t_diff_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
@@ -369,17 +368,20 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
         break;
     }
 
-    /*
-     * when an lthread is scheduled to sleep indefinitely we'll add it to
-     * the busy list so the scheduler can keep track of it.
-     */ 
-    if (msecs == 0)
-        LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
-
     _lthread_yield(lt);
-    if (msecs == 0)
-        LIST_REMOVE(lt, busy_next);
-    lt->state &= CLEARBIT(LT_ST_SLEEPING);
+    if (msecs >0)
+        lt->state &= CLEARBIT(LT_ST_SLEEPING);
+}
+
+void
+_lthread_sched_busy_sleep(struct lthread *lt, uint64_t msecs)
+{
+
+    LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
+    lt->state |= BIT(LT_ST_BUSY);
+    _lthread_sched_sleep(lt, msecs);
+    lt->state &= CLEARBIT(LT_ST_BUSY);
+    LIST_REMOVE(lt, busy_next);
 }
 
 /*

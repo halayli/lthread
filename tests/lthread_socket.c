@@ -18,9 +18,11 @@ socket_client_server_reader(void *cli_fd)
 {
     int fd = ((struct conn *)cli_fd)->fd;
     char buf[100];
+    int r = 0;
     while (1) {
-        lthread_read(fd, buf, 100, 0);
-        printf("read from server: %s\n", buf);
+        r = lthread_read(fd, buf, 100, 10);
+        if (r > 0)
+            printf("read from server: %.*s\n", r, buf);
     }
 }
 
@@ -32,7 +34,6 @@ socket_client_server_writer(void *cli_fd)
     printf("fd is %d\n", fd);
     while (1) {
         lthread_write(fd, buf, strlen(buf));
-        printf("wrote to server\n");
         lthread_sleep(1000);
     }
 }
@@ -67,10 +68,11 @@ socket_server_client_reader(void *cli_fd)
 {
     int fd = ((struct conn *)cli_fd)->fd;
     char buf[100];
+    int r = 0;
     printf("socket_server_client_reader started\n");
     while (1) {
-        lthread_read(fd, buf, 100, 0);
-        printf("read from client: %s\n", buf);
+        r = lthread_read(fd, buf, 100, 0);
+        printf("read from client: %.*s\n", r, buf);
     }
 }
 

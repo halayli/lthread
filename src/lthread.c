@@ -152,6 +152,8 @@ _lthread_resume(struct lthread *lt)
         /* if lthread is detached, then we can free it up */
         if (lt->state & BIT(LT_ST_DETACH))
             _lthread_free(lt);
+        if (lt->state & BIT(LT_ST_BUSY))
+            LIST_REMOVE(lt, busy_next);
         return (-1);
     }
 
@@ -416,9 +418,7 @@ lthread_cond_wait(struct lthread_cond *c, uint64_t timeout)
     struct lthread *lt = lthread_get_sched()->current_lthread;
     TAILQ_INSERT_TAIL(&c->blocked_lthreads, lt, cond_next);
 
-    lt->state |= BIT(LT_ST_LOCKED);
-    _lthread_sched_sleep(lt, timeout);
-    lt->state &= CLEARBIT(LT_ST_LOCKED);
+    _lthread_sched_busy_sleep(lt, timeout);
 
     if (lt->state & BIT(LT_ST_EXPIRED)) {
         TAILQ_REMOVE(&c->blocked_lthreads, lt, cond_next);
@@ -482,12 +482,12 @@ lthread_wakeup(struct lthread *lt)
 void
 lthread_exit(void *ptr)
 {
-    struct lthread *current = lthread_get_sched()->current_lthread;
-    if (current->lt_join && current->lt_join->lt_exit_ptr && ptr)
-        *(current->lt_join->lt_exit_ptr) = ptr;
+    struct lthread *lt = lthread_get_sched()->current_lthread;
+    if (lt->lt_join && lt->lt_join->lt_exit_ptr && ptr)
+        *(lt->lt_join->lt_exit_ptr) = ptr;
 
-    current->state |= BIT(LT_ST_EXITED);
-    _lthread_yield(current);
+    lt->state |= BIT(LT_ST_EXITED);
+    _lthread_yield(lt);
 }
 
 int
@@ -502,7 +502,7 @@ lthread_join(struct lthread *lt, void **ptr, uint64_t timeout)
     if (lt->state & BIT(LT_ST_EXITED))
         return (-1);
 
-    _lthread_sched_sleep(current, timeout);
+    _lthread_sched_busy_sleep(current, timeout);
 
     if (current->state & BIT(LT_ST_EXPIRED)) {
         lt->lt_join = NULL;

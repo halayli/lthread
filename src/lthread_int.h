@@ -86,7 +86,7 @@ enum lthread_st {
     LT_ST_NEW,         /* lthread spawned but needs initialization */
     LT_ST_READY,       /* lthread is ready to run */
     LT_ST_EXITED,      /* lthread has exited and needs cleanup */
-    LT_ST_LOCKED,      /* lthread is locked on a condition */
+    LT_ST_BUSY,         /* lthread is waiting on join/cond/compute */
     LT_ST_SLEEPING,    /* lthread is sleeping */
     LT_ST_EXPIRED,     /* lthread has expired and needs to run */
     LT_ST_FDEOF,       /* lthread socket has shut down */
@@ -185,6 +185,7 @@ void        _lthread_yield(struct lthread *lt);
 void        _lthread_free(struct lthread *lt);
 void        _lthread_desched_sleep(struct lthread *lt);
 void        _lthread_sched_sleep(struct lthread *lt, uint64_t msecs);
+void        _lthread_sched_busy_sleep(struct lthread *lt, uint64_t msecs);
 void        _lthread_cancel_event(struct lthread *lt);
 struct lthread* _lthread_desched_event(int fd, enum lthread_event e);
 void        _lthread_sched_event(struct lthread *lt, int fd,
