@@ -121,6 +121,7 @@ struct lthread {
     RB_ENTRY(lthread)       wait_node;      /* event tree node pointer */
     TAILQ_ENTRY(lthread)    ready_next;     /* ready to run list */
     TAILQ_ENTRY(lthread)    cond_next;      /* waiting on a cond var */
+    LIST_ENTRY(lthread)     busy_next;      /* indefinite wait  on join/cond */
     LIST_ENTRY(lthread)     compute_next;   /* waiting to enter compute */
     LIST_ENTRY(lthread)     compute_sched_next; /* in compute scheduler */
     /* lthread_compute schduler - when running in compute block */
@@ -156,6 +157,7 @@ struct lthread_sched {
     /* lists to save an lthread depending on its state */
     struct lthread_q        ready;
     struct lthread_l        compute;
+    struct lthread_l        busy;
     struct lthread_rb_sleep sleeping;
     struct lthread_rb_wait  waiting;
 };

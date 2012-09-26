@@ -51,6 +51,7 @@ static uint64_t _lthread_min_timeout(struct lthread_sched *);
 
 static int  _lthread_poll(void);
 static void _lthread_resume_expired(struct lthread_sched *sched);
+static inline int _lthread_sched_done(struct lthread_sched *sched);
 
 static char tmp[100];
 static struct lthread find_lt;
@@ -59,11 +60,11 @@ static int
 _lthread_poll(void)
 {
     struct lthread_sched *sched;
-    struct timespec t = {0, 0};
+    sched = lthread_get_sched();
+    struct timespec t = {0, sched->default_timeout};
     int ret = 0;
     uint64_t usecs = 0;
 
-    sched = lthread_get_sched();
 
     sched->num_new_events = 0;
     usecs = _lthread_min_timeout(sched);
@@ -75,6 +76,9 @@ _lthread_poll(void)
             t.tv_nsec  =  (usecs % 1000u)  * 1000000u;
         else
             t.tv_nsec = usecs * 1000u;
+    } else {
+        t.tv_nsec = 0;
+        t.tv_sec = 0;
     }
 
     ret = _lthread_poller_poll(t);
@@ -112,6 +116,25 @@ _lthread_min_timeout(struct lthread_sched *sched)
     return (0);
 }
 
+/*
+ * Returns 0 if there is a pending job in scheduler or 1 if done and can exit.
+ */
+static inline int
+_lthread_sched_done(struct lthread_sched *sched)
+{
+    int compute_empty = 0;
+    assert(pthread_mutex_lock(&sched->compute_mutex) == 0);
+    compute_empty = LIST_EMPTY(&sched->compute);
+    assert(pthread_mutex_unlock(&sched->compute_mutex) == 0);
+
+    return !(compute_empty &&
+        RB_EMPTY(&sched->waiting) &&
+        LIST_EMPTY(&sched->busy) &&
+        RB_EMPTY(&sched->sleeping) &&
+        RB_EMPTY(&sched->waiting) &&
+        TAILQ_EMPTY(&sched->ready));
+}
+
 void
 lthread_run(void)
 {
@@ -129,9 +152,7 @@ lthread_run(void)
     if (sched == NULL)
         return;
 
-    while (!RB_EMPTY(&sched->sleeping) ||
-        !RB_EMPTY(&sched->waiting) ||
-        !TAILQ_EMPTY(&sched->ready)) {
+    while (_lthread_sched_done(sched) != 0) {
 
         /* 1. start by checking if a sleeping thread needs to wakeup */
         _lthread_resume_expired(sched);
@@ -330,8 +351,17 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
         break;
     }
 
+    /*
+     * when an lthread is scheduled to sleep indefinitely we'll add it to
+     * the busy list so the scheduler can keep track of it.
+     */ 
+    if (msecs == 0)
+        LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
+
     lt->state |= BIT(LT_ST_SLEEPING);
     _lthread_yield(lt);
+    if (msecs == 0)
+        LIST_REMOVE(lt, busy_next);
     lt->state &= CLEARBIT(LT_ST_SLEEPING);
 }
 
@@ -356,7 +386,7 @@ _lthread_resume_expired(struct lthread_sched *sched)
             _lthread_desched_sleep(lt);
             lt->state |= BIT(LT_ST_EXPIRED);
 
-            /* no need to clear expired if lthread exited/cancelled */
+            /* don't clear expired if lthread exited/cancelled */
             if (_lthread_resume(lt) != -1)
                 lt->state &= CLEARBIT(LT_ST_EXPIRED);
 
