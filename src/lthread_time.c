@@ -26,13 +26,69 @@
  * lthread_time.c
  */
 
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include "lthread_time.h"
+
+static uint64_t cpu_freq = 1801800000L;
+
+#if defined(__FreeBSD__) || defined(__APPLE__)
+int
+rdtsc_init(void)
+{
+    char buf[8];
+    char buf_size = 0;
+    int ret = 0;
+    #if defined(__APPLE__)
+    ret = sysctlbyname("machdep.tsc.frequency", &buffer, &buf_size, NULL, 0);
+    #else
+    ret = sysctlbyname("machdep.tsc_freq", &buffer, &buf_size, NULL, 0);
+    # endif
+    if (ret == 0) {
+        if (buf_size == 4)
+            cpu_freq = (uint32_t*)buf;
+        if (buf_size == 8)
+            cpu_freq = (uint64_t*)buf;
+    }
+
+    return (ret);
+}
+#else
+int
+rdtsc_init(void)
+{
+    FILE *fp = NULL;
+    #define MAXLEN 1024
+    char line[MAXLEN];
+    char *tmp = NULL;
+    int not_found = 1;
+
+    if ((fp = fopen("/proc/cpuinfo", "r")) == NULL)
+        return (-1);
+
+    while (fgets(line, MAXLEN, fp) != NULL) {
+        if ((tmp = strstr(line, "cpu MHz")) != NULL) {
+            if ((tmp = strchr(tmp, ':')) != NULL) {
+                not_found = 0;
+                printf("yaay! %s\n", tmp);
+                cpu_freq = strtod(tmp, NULL) * 1000000u;
+                break;
+            }
+        }
+    }
+    fclose(fp);
+    printf("cpu_freq is %lu\n",  cpu_freq);
+
+    return not_found;
+}
+#endif
 
 uint64_t
 tick_diff_usecs(uint64_t t1, uint64_t t2)
 {
     uint64_t t3 =  0;
-    t3 = ((long double)(t2 - t1)/1801800000L) * 1000000u;
+    t3 = ((long double)(t2 - t1)/cpu_freq) * 1000000u;
     return (t3);
 }
 
@@ -40,14 +96,14 @@ uint64_t
 tick_diff_msecs(uint64_t t1, uint64_t t2)
 {
        uint64_t t3 =  0;
-	t3 = ((long double)(t2 - t1)/2793008320u) * 1000000u;
+	t3 = ((long double)(t2 - t1)/cpu_freq) * 1000000u;
        return (t3/1000);
 }
 
 uint64_t
 tick_diff_secs(uint64_t t1, uint64_t t2)
 {
-    uint64_t t3 = ((long double)(t2 - t1)/2793008320u) * 1000000u;
+    uint64_t t3 = ((long double)(t2 - t1)/cpu_freq) * 1000000u;
     return (t3/1000000);
 }
 

@@ -273,6 +273,7 @@ sched_create(size_t stack_size)
     struct lthread_sched *new_sched;
     size_t sched_stack_size = 0;
 
+    rdtsc_init();
     sched_stack_size = stack_size ? stack_size : MAX_STACK_SIZE;
 
     if ((new_sched = calloc(1, sizeof(struct lthread_sched))) == NULL) {

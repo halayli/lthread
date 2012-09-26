@@ -314,13 +314,14 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
     struct lthread *lt_tmp = NULL;
     uint64_t t_diff_usecs = 0;
     uint64_t usecs = msecs * 1000u;
-    t_diff_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
 
-    while (1) {
-        /* resolve collision by adding usec until we find a non-existant node */
+    /*
+     * if msecs is 0, we won't schedule lthread otherwise loop until
+     * collision resolved(very rare) by incrementing usec by one each time.
+     */
+    while (msecs) {
+        t_diff_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
         lt->sleep_usecs = t_diff_usecs;
-        if (msecs == 0)
-            break;
         lt_tmp = RB_INSERT(lthread_rb_sleep, &lt->sched->sleeping, lt);
         if (lt_tmp) {
             t_diff_usecs++;
