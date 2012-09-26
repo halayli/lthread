@@ -456,8 +456,7 @@ void
 lthread_sleep(uint64_t msecs)
 {
     struct lthread *lt = lthread_get_sched()->current_lthread;
-    if (msecs > 0)
-        _lthread_sched_sleep(lt, msecs);
+    _lthread_sched_sleep(lt, msecs);
 }
 
 inline void
