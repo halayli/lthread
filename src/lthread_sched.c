@@ -122,16 +122,9 @@ _lthread_min_timeout(struct lthread_sched *sched)
 static inline int
 _lthread_sched_done(struct lthread_sched *sched)
 {
-    int compute_empty = 0;
-    assert(pthread_mutex_lock(&sched->compute_mutex) == 0);
-    compute_empty = LIST_EMPTY(&sched->compute);
-    assert(pthread_mutex_unlock(&sched->compute_mutex) == 0);
-
-    return !(compute_empty &&
-        RB_EMPTY(&sched->waiting) &&
+    return !(RB_EMPTY(&sched->waiting) &&
         LIST_EMPTY(&sched->busy) &&
         RB_EMPTY(&sched->sleeping) &&
-        RB_EMPTY(&sched->waiting) &&
         TAILQ_EMPTY(&sched->ready));
 }
 
@@ -167,14 +160,15 @@ lthread_run(void)
 
         /* 3. resume lthreads we received from lthread_compute, if any */
         while (1) {
-            pthread_mutex_lock(&sched->compute_mutex);
+            assert(pthread_mutex_lock(&sched->compute_mutex) == 0);
             lt = LIST_FIRST(&sched->compute);
             if (lt == NULL) {
-                pthread_mutex_unlock(&sched->compute_mutex);
+                assert(pthread_mutex_unlock(&sched->compute_mutex) == 0);
                 break;
             }
             LIST_REMOVE(lt, compute_sched_next);
             assert(pthread_mutex_unlock(&sched->compute_mutex) == 0);
+            LIST_REMOVE(lt, busy_next);
             _lthread_resume(lt);
         }
 

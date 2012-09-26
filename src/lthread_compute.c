@@ -149,6 +149,7 @@ _lthread_compute_add(struct lthread *lt)
     stack = (void **)(lt->compute_sched->stack + MAX_STACK_SIZE);
     org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
 
+    LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
     /* change ebp esp to be relative to the new stack address */
     lt->ctx.ebp = lt->compute_sched->ctx.ebp = (void*)((intptr_t)stack - \
          ((intptr_t)org_stack - (intptr_t)(lt->ctx.ebp)));
