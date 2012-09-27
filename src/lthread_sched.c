@@ -74,7 +74,7 @@ static uint64_t _lthread_min_timeout(struct lthread_sched *);
 
 static int  _lthread_poll(void);
 static void _lthread_resume_expired(struct lthread_sched *sched);
-static inline int _lthread_sched_done(struct lthread_sched *sched);
+static inline int _lthread_sched_isdone(struct lthread_sched *sched);
 
 static char tmp[100];
 static struct lthread find_lt;
@@ -143,9 +143,9 @@ _lthread_min_timeout(struct lthread_sched *sched)
  * Returns 0 if there is a pending job in scheduler or 1 if done and can exit.
  */
 static inline int
-_lthread_sched_done(struct lthread_sched *sched)
+_lthread_sched_isdone(struct lthread_sched *sched)
 {
-    return !(RB_EMPTY(&sched->waiting) &&
+    return (RB_EMPTY(&sched->waiting) &&
         LIST_EMPTY(&sched->busy) &&
         RB_EMPTY(&sched->sleeping) &&
         TAILQ_EMPTY(&sched->ready));
@@ -168,7 +168,7 @@ lthread_run(void)
     if (sched == NULL)
         return;
 
-    while (_lthread_sched_done(sched) != 0) {
+    while (!_lthread_sched_isdone(sched)) {
 
         /* 1. start by checking if a sleeping thread needs to wakeup */
         _lthread_resume_expired(sched);
@@ -349,7 +349,6 @@ void
 _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
 {
     struct lthread *lt_tmp = NULL;
-    uint64_t t_diff_usecs = 0;
     uint64_t usecs = msecs * 1000u;
 
     /*
@@ -357,11 +356,10 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
      * collision resolved(very rare) by incrementing usec++.
      */
     while (msecs) {
-        t_diff_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
-        lt->sleep_usecs = t_diff_usecs;
+        lt->sleep_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
         lt_tmp = RB_INSERT(lthread_rb_sleep, &lt->sched->sleeping, lt);
         if (lt_tmp) {
-            t_diff_usecs++;
+            lt->sleep_usecs++;
             continue;
         }
         lt->state |= BIT(LT_ST_SLEEPING);
@@ -369,7 +367,7 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
     }
 
     _lthread_yield(lt);
-    if (msecs >0)
+    if (msecs > 0)
         lt->state &= CLEARBIT(LT_ST_SLEEPING);
 }
 
