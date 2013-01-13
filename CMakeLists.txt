@@ -20,6 +20,7 @@ target_link_libraries(lthread_sleep lthread pthread)
 
 add_executable(lthread_join tests/lthread_join.c)
 target_link_libraries(lthread_join lthread pthread)
+include_directories(src)
 
 enable_testing()
 add_test(lthread_sleep ${UNIT_TEST_PATH}/lthread_sleep)

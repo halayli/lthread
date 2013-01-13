@@ -40,18 +40,18 @@ int
 rdtsc_init(void)
 {
     char buf[8];
-    char buf_size = 0;
+    size_t buf_size = 0;
     int ret = 0;
     #if defined(__APPLE__)
-    ret = sysctlbyname("machdep.tsc.frequency", &buffer, &buf_size, NULL, 0);
+    ret = sysctlbyname("machdep.tsc.frequency", buf, &buf_size, NULL, 0);
     #else
-    ret = sysctlbyname("machdep.tsc_freq", &buffer, &buf_size, NULL, 0);
+    ret = sysctlbyname("machdep.tsc_freq", buf, &buf_size, NULL, 0);
     # endif
     if (ret == 0) {
         if (buf_size == 4)
-            cpu_freq = (uint32_t*)buf;
+            cpu_freq = *(uint32_t*)buf;
         if (buf_size == 8)
-            cpu_freq = (uint64_t*)buf;
+            cpu_freq = *(uint64_t*)buf;
     }
 
     return (ret);

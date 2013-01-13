@@ -355,8 +355,8 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
      * if msecs is 0, we won't schedule lthread otherwise loop until
      * collision resolved(very rare) by incrementing usec++.
      */
+    lt->sleep_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
     while (msecs) {
-        lt->sleep_usecs = tick_diff_usecs(lt->sched->birth, rdtsc()) + usecs;
         lt_tmp = RB_INSERT(lthread_rb_sleep, &lt->sched->sleeping, lt);
         if (lt_tmp) {
             lt->sleep_usecs++;
@@ -369,6 +369,7 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
     _lthread_yield(lt);
     if (msecs > 0)
         lt->state &= CLEARBIT(LT_ST_SLEEPING);
+    lt->sleep_usecs = 0;
 }
 
 void
