@@ -37,7 +37,7 @@ static uint64_t cpu_freq = 1801800000L;
 #include <sys/types.h>
 #include <sys/sysctl.h>
 int
-rdtsc_init(void)
+_lthread_rdtsc_init(void)
 {
     char buf[8];
     size_t buf_size = 0;
@@ -58,7 +58,7 @@ rdtsc_init(void)
 }
 #else
 int
-rdtsc_init(void)
+_lthread_rdtsc_init(void)
 {
     FILE *fp = NULL;
     #define MAXLEN 1024
@@ -86,7 +86,7 @@ rdtsc_init(void)
 #endif
 
 uint64_t
-tick_diff_usecs(uint64_t t1, uint64_t t2)
+_lthread_tick_diff_usecs(uint64_t t1, uint64_t t2)
 {
     uint64_t t3 =  0;
     t3 = ((long double)(t2 - t1)/cpu_freq) * 1000000u;
@@ -94,7 +94,7 @@ tick_diff_usecs(uint64_t t1, uint64_t t2)
 }
 
 uint64_t
-tick_diff_msecs(uint64_t t1, uint64_t t2)
+_lthread_tick_diff_msecs(uint64_t t1, uint64_t t2)
 {
        uint64_t t3 =  0;
 	t3 = ((long double)(t2 - t1)/cpu_freq) * 1000000u;
@@ -102,7 +102,7 @@ tick_diff_msecs(uint64_t t1, uint64_t t2)
 }
 
 uint64_t
-tick_diff_secs(uint64_t t1, uint64_t t2)
+_lthread_tick_diff_secs(uint64_t t1, uint64_t t2)
 {
     uint64_t t3 = ((long double)(t2 - t1)/cpu_freq) * 1000000u;
     return (t3/1000000);
@@ -110,7 +110,7 @@ tick_diff_secs(uint64_t t1, uint64_t t2)
 
 #ifdef __i386__
 inline uint32_t
-rdtsc(void)
+_lthread_rdtsc(void)
 {
     uint32_t a;
     __asm__ volatile (".byte 0x0f, 0x31" : "=A" (a));
@@ -118,7 +118,7 @@ rdtsc(void)
 }
 #else
 inline uint64_t
-rdtsc(void)
+_lthread_rdtsc(void)
 {
   uint32_t a = 0, d = 0;
 

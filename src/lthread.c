@@ -275,7 +275,7 @@ sched_create(size_t stack_size)
     struct lthread_sched *new_sched;
     size_t sched_stack_size = 0;
 
-    rdtsc_init();
+    _lthread_rdtsc_init();
     sched_stack_size = stack_size ? stack_size : MAX_STACK_SIZE;
 
     if ((new_sched = calloc(1, sizeof(struct lthread_sched))) == NULL) {
@@ -317,7 +317,7 @@ sched_create(size_t stack_size)
     new_sched->default_timeout = 3000000u;
     RB_INIT(&new_sched->sleeping);
     RB_INIT(&new_sched->waiting);
-    new_sched->birth = rdtsc();
+    new_sched->birth = _lthread_rdtsc();
     TAILQ_INIT(&new_sched->ready);
     LIST_INIT(&new_sched->busy);
 
@@ -354,7 +354,7 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
     lt->fun = fun;
     lt->fd_wait = -1;
     lt->arg = arg;
-    lt->birth = rdtsc();
+    lt->birth = _lthread_rdtsc();
     *new_lt = lt;
     TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 
