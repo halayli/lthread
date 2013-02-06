@@ -264,11 +264,8 @@ _sched_free(struct lthread_sched *sched)
 {
     close(sched->poller_fd);
 
-    close(sched->io_pipes[0]);
-    close(sched->io_pipes[1]);
-
-    close(sched->compute_pipes[0]);
-    close(sched->compute_pipes[1]);
+    close(sched->defer_pipes[0]);
+    close(sched->defer_pipes[1]);
 
     free(sched->stack);
 
@@ -315,14 +312,8 @@ sched_create(size_t stack_size)
         return (errno);
     }
 
-    if (pipe(new_sched->compute_pipes) == -1) {
-        perror("Failed to initialize compute pipe\n");
-        _sched_free(new_sched);
-        return (errno);
-    }
-
-    if (pipe(new_sched->io_pipes) == -1) {
-        perror("Failed to initialize io pipe\n");
+    if (pipe(new_sched->defer_pipes) == -1) {
+        perror("Failed to initialize defer pipe\n");
         _sched_free(new_sched);
         return (errno);
     }

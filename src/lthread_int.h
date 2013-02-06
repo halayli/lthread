@@ -165,8 +165,7 @@ struct lthread_sched {
     POLL_EVENT_TYPE     eventlist[LT_MAX_EVENTS];
     int                 nevents;
     int                 num_new_events;
-    int                 compute_pipes[2];
-    int                 io_pipes[2];
+    int                 defer_pipes[2];
     pthread_mutex_t     defer_mutex;
     /* lists to save an lthread depending on its state */
     /* lthreads ready to run */

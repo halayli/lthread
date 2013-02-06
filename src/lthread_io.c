@@ -131,7 +131,7 @@ _lthread_io_worker(void *arg)
             assert(pthread_mutex_unlock(&lt->sched->defer_mutex) == 0);
 
             /* signal the prev scheduler in case it was sleeping in a poll */
-            ret = write(lt->sched->io_pipes[1], "1", 1);
+            ret = write(lt->sched->defer_pipes[1], "1", 1);
             assert(ret == 1);
         }
 

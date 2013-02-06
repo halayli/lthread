@@ -197,8 +197,7 @@ lthread_run(void)
         }
 
         /* 4. check if we received any events after lthread_poll */
-        _lthread_poller_ev_register_rd(sched->compute_pipes[0]);
-        _lthread_poller_ev_register_rd(sched->io_pipes[0]);
+        _lthread_poller_ev_register_rd(sched->defer_pipes[0]);
         _lthread_poll();
 
         /* 5. fire up lthreads that are ready to run */
@@ -206,22 +205,11 @@ lthread_run(void)
             p = --sched->num_new_events;
 
             /* 
-             * We got signaled via pipe to wakeup from polling & rusume compute.
-             * Those lthreads will get handled in step 3.
-             */
-            fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
-            if (fd == sched->compute_pipes[0]) {
-                ret = read(fd, &tmp, sizeof(tmp));
-                assert(ret > 0);
-                continue;
-            }
-
-            /* 
              * We got signaled via pipe to wakeup from polling & rusume file io.
              * Those lthreads will get handled in step 4.
              */
             fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
-            if (fd == sched->io_pipes[0]) {
+            if (fd == sched->defer_pipes[0]) {
                 ret = read(fd, &tmp, sizeof(tmp));
                 assert(ret > 0);
                 continue;
