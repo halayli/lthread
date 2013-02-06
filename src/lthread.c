@@ -263,10 +263,19 @@ void
 _sched_free(struct lthread_sched *sched)
 {
     close(sched->poller_fd);
+
+    close(sched->io_pipes[0]);
+    close(sched->io_pipes[1]);
+
+    close(sched->compute_pipes[0]);
+    close(sched->compute_pipes[1]);
+
     free(sched->stack);
-    assert(pthread_mutex_destroy(&sched->compute_mutex) == 0);
+
+    pthread_mutex_destroy(&sched->defer_mutex);
+
     free(sched);
-    assert(pthread_setspecific(lthread_sched_key, NULL) == 0);
+    pthread_setspecific(lthread_sched_key, NULL);
 }
 
 int
@@ -284,6 +293,7 @@ sched_create(size_t stack_size)
     }
 
     assert(pthread_setspecific(lthread_sched_key, new_sched) == 0);
+    assert(_lthread_io_worker_init() == 0);
 
     if ((new_sched->stack = calloc(1, sched_stack_size)) == NULL) {
         free(new_sched);
@@ -299,14 +309,20 @@ sched_create(size_t stack_size)
         return (errno);
     }
 
-    if (pthread_mutex_init(&new_sched->compute_mutex, NULL) != 0) {
-        perror("Failed to initialize compute_mutex\n");
+    if (pthread_mutex_init(&new_sched->defer_mutex, NULL) != 0) {
+        perror("Failed to initialize defer_mutex\n");
         _sched_free(new_sched);
         return (errno);
     }
 
     if (pipe(new_sched->compute_pipes) == -1) {
-        perror("Failed to initialize pipe\n");
+        perror("Failed to initialize compute pipe\n");
+        _sched_free(new_sched);
+        return (errno);
+    }
+
+    if (pipe(new_sched->io_pipes) == -1) {
+        perror("Failed to initialize io pipe\n");
         _sched_free(new_sched);
         return (errno);
     }
@@ -319,6 +335,7 @@ sched_create(size_t stack_size)
     RB_INIT(&new_sched->waiting);
     new_sched->birth = _lthread_rdtsc();
     TAILQ_INIT(&new_sched->ready);
+    TAILQ_INIT(&new_sched->defer);
     LIST_INIT(&new_sched->busy);
 
     bzero(&new_sched->ctx, sizeof(struct cpu_ctx));
@@ -390,12 +407,14 @@ lthread_cancel(struct lthread *lt)
     _lthread_cancel_event(lt);
     /*
      * we don't schedule the cancelled lthread if it was running in a compute
-     * scheduler or pending to run in a compute scheduler. otherwise it could
-     * get freed while it's still running.
-     * when it's done in compute_scheduler - the scheduler will attempt to run
-     * it and realize it's cancelled and abort the resumption.
+     * scheduler or pending to run in a compute scheduler or in an io worker.
+     * otherwise it could get freed while it's still running.
+     * when it's done in compute_scheduler, or io_worker - the scheduler will
+     * attempt to run it and realize it's cancelled and abort the resumption.
      */
     if (lt->state & BIT(LT_ST_PENDING_RUNCOMPUTE) ||
+        lt->state & BIT(LT_ST_WAIT_IO_READ) ||
+        lt->state & BIT(LT_ST_WAIT_IO_WRITE) ||
         lt->state & BIT(LT_ST_RUNCOMPUTE))
         return;
     TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);

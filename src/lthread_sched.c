@@ -184,20 +184,21 @@ lthread_run(void)
 
         /* 3. resume lthreads we received from lthread_compute, if any */
         while (1) {
-            assert(pthread_mutex_lock(&sched->compute_mutex) == 0);
-            lt = LIST_FIRST(&sched->compute);
+            assert(pthread_mutex_lock(&sched->defer_mutex) == 0);
+            lt = TAILQ_FIRST(&sched->defer);
             if (lt == NULL) {
-                assert(pthread_mutex_unlock(&sched->compute_mutex) == 0);
+                assert(pthread_mutex_unlock(&sched->defer_mutex) == 0);
                 break;
             }
-            LIST_REMOVE(lt, compute_sched_next);
-            assert(pthread_mutex_unlock(&sched->compute_mutex) == 0);
+            TAILQ_REMOVE(&sched->defer, lt, defer_next);
+            assert(pthread_mutex_unlock(&sched->defer_mutex) == 0);
             LIST_REMOVE(lt, busy_next);
             _lthread_resume(lt);
         }
 
         /* 4. check if we received any events after lthread_poll */
         _lthread_poller_ev_register_rd(sched->compute_pipes[0]);
+        _lthread_poller_ev_register_rd(sched->io_pipes[0]);
         _lthread_poll();
 
         /* 5. fire up lthreads that are ready to run */
@@ -210,6 +211,17 @@ lthread_run(void)
              */
             fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
             if (fd == sched->compute_pipes[0]) {
+                ret = read(fd, &tmp, sizeof(tmp));
+                assert(ret > 0);
+                continue;
+            }
+
+            /* 
+             * We got signaled via pipe to wakeup from polling & rusume file io.
+             * Those lthreads will get handled in step 4.
+             */
+            fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
+            if (fd == sched->io_pipes[0]) {
                 ret = read(fd, &tmp, sizeof(tmp));
                 assert(ret > 0);
                 continue;

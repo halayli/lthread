@@ -49,6 +49,7 @@
 struct lthread;
 struct lthread_sched;
 struct lthread_compute_sched;
+struct lthread_io_sched;
 struct lthread_cond;
 
 LIST_HEAD(lthread_l, lthread);
@@ -76,24 +77,31 @@ enum lthread_event {
 };
 
 enum lthread_compute_st {
-    COMPUTE_BUSY,
-    COMPUTE_FREE,
+    LT_COMPUTE_BUSY,
+    LT_COMPUTE_FREE,
+};
+
+enum lthread_io_st {
+    LT_IO_BUSY,
+    LT_IO_FREE,
 };
 
 enum lthread_st {
-    LT_ST_WAIT_READ,   /* lthread waiting for READ on socket */
-    LT_ST_WAIT_WRITE,  /* lthread waiting for WRITE on socket */
-    LT_ST_NEW,         /* lthread spawned but needs initialization */
-    LT_ST_READY,       /* lthread is ready to run */
-    LT_ST_EXITED,      /* lthread has exited and needs cleanup */
-    LT_ST_BUSY,         /* lthread is waiting on join/cond/compute */
-    LT_ST_SLEEPING,    /* lthread is sleeping */
-    LT_ST_EXPIRED,     /* lthread has expired and needs to run */
-    LT_ST_FDEOF,       /* lthread socket has shut down */
-    LT_ST_DETACH,      /* lthread frees when done, else it waits to join */
-    LT_ST_CANCELLED,   /* lthread has been cancelled */
-    LT_ST_RUNCOMPUTE,  /* lthread needs to run on a compute pthread */
-    LT_ST_PENDING_RUNCOMPUTE, /* lthread needs to run on a compute pthread */
+    LT_ST_WAIT_READ,    /* lthread waiting for READ on socket */
+    LT_ST_WAIT_WRITE,   /* lthread waiting for WRITE on socket */
+    LT_ST_NEW,          /* lthread spawned but needs initialization */
+    LT_ST_READY,        /* lthread is ready to run */
+    LT_ST_EXITED,       /* lthread has exited and needs cleanup */
+    LT_ST_BUSY,         /* lthread is waiting on join/cond/compute/io */
+    LT_ST_SLEEPING,     /* lthread is sleeping */
+    LT_ST_EXPIRED,      /* lthread has expired and needs to run */
+    LT_ST_FDEOF,        /* lthread socket has shut down */
+    LT_ST_DETACH,       /* lthread frees when done, else it waits to join */
+    LT_ST_CANCELLED,    /* lthread has been cancelled */
+    LT_ST_PENDING_RUNCOMPUTE, /* lthread needs to run in compute sched, step1 */
+    LT_ST_RUNCOMPUTE,   /* lthread needs to run in compute sched (2), step2 */
+    LT_ST_WAIT_IO_READ, /* lthread waiting for READ IO to finish */
+    LT_ST_WAIT_IO_WRITE /* lthread waiting for WRITE IO to finish */
 };
 
 struct lthread {
@@ -117,13 +125,17 @@ struct lthread {
     RB_ENTRY(lthread)       sleep_node;     /* sleep tree node pointer */
     RB_ENTRY(lthread)       wait_node;      /* event tree node pointer */
     TAILQ_ENTRY(lthread)    ready_next;     /* ready to run list */
+    TAILQ_ENTRY(lthread)    defer_next;     /* ready to run after deferred job */
     TAILQ_ENTRY(lthread)    cond_next;      /* waiting on a cond var */
-    LIST_ENTRY(lthread)     busy_next;      /* indefinite wait in compute
-                                             * join or cond */
-    LIST_ENTRY(lthread)     compute_next;   /* waiting to enter compute */
-    LIST_ENTRY(lthread)     compute_sched_next; /* waiting to resume back in
-                                                 * schedule after compute job
-                                                 * was done. */
+    LIST_ENTRY(lthread)    busy_next;      /* blocked lthreads */
+    LIST_ENTRY(lthread)     io_next;        /* waiting its turn in io */
+    LIST_ENTRY(lthread)     compute_next;   /* waiting to run in compute sched */
+    struct {
+        void *buf;
+        size_t nbytes;
+        int ret;
+        int err;
+    } io;
     /* lthread_compute schduler - when running in compute block */
     struct lthread_compute_sched    *compute_sched;
 };
@@ -153,12 +165,18 @@ struct lthread_sched {
     int                 nevents;
     int                 num_new_events;
     int                 compute_pipes[2];
-    pthread_mutex_t     compute_mutex;
+    int                 io_pipes[2];
+    pthread_mutex_t     defer_mutex;
     /* lists to save an lthread depending on its state */
+    /* lthreads ready to run */
     struct lthread_q        ready;
-    struct lthread_l        compute;
+    /* lthreads ready to run after io or compute is done */
+    struct lthread_q        defer;
+    /* lthreads in join/cond_wait/io/compute */
     struct lthread_l        busy;
+    /* lthreads zzzzz */
     struct lthread_rb_sleep sleeping;
+    /* lthreads waiting on socket io */
     struct lthread_rb_wait  waiting;
 };
 
@@ -195,6 +213,7 @@ inline int  _restore_exec_state(struct lthread *lt);
 int         _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
 int         _save_exec_state(struct lthread *lt);
 void        _lthread_compute_add(struct lthread *lt);
+int         _lthread_io_worker_init();
 
 extern pthread_key_t lthread_sched_key;
 

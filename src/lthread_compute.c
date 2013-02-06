@@ -40,8 +40,8 @@
 #include "lthread_int.h"
 
 enum {THREAD_TIMEOUT_BEFORE_EXIT = 60};
-pthread_key_t compute_sched_key;
-pthread_once_t key_once = PTHREAD_ONCE_INIT;
+static pthread_key_t compute_sched_key;
+static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
 LIST_HEAD(compute_sched_l, lthread_compute_sched) compute_scheds = \
     LIST_HEAD_INITIALIZER(compute_scheds);
@@ -65,7 +65,7 @@ lthread_compute_begin(void)
     /* search for an empty compute_scheduler */
     assert(pthread_mutex_lock(&sched_mutex) == 0);
     LIST_FOREACH(tmp, &compute_scheds, compute_next) {
-        if (tmp->compute_st == COMPUTE_FREE) {
+        if (tmp->compute_st == LT_COMPUTE_FREE) {
             compute_sched = tmp;
             break;
         }
@@ -156,10 +156,15 @@ _lthread_compute_add(struct lthread *lt)
     lt->ctx.esp = lt->compute_sched->ctx.esp = (void*)((intptr_t)stack - \
         lt->stack_size);
 
+    /*
+     * lthread is in scheduler list at this point. lock mutex to change
+     * state since the state is checked in scheduler as well.
+     */
     assert(pthread_mutex_lock(&lt->compute_sched->lthreads_mutex) == 0);
     lt->state &= CLEARBIT(LT_ST_PENDING_RUNCOMPUTE);
     lt->state |= BIT(LT_ST_RUNCOMPUTE);
     assert(pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex) == 0);
+
     /* wakeup pthread if it was sleeping */
     assert(pthread_mutex_lock(&lt->compute_sched->run_mutex) == 0);
     assert(pthread_cond_signal(&lt->compute_sched->run_mutex_cond) == 0);
@@ -250,7 +255,7 @@ _lthread_compute_resume(struct lthread *lt)
     _lthread_compute_save_exec_state(lt);
 }
 
-void
+static void
 once_routine(void)
 {
     assert(pthread_key_create(&compute_sched_key, NULL) == 0);
@@ -294,22 +299,22 @@ _lthread_compute_run(void *arg)
             assert(pthread_mutex_unlock(&compute_sched->lthreads_mutex) == 0);
 
             compute_sched->current_lthread = lt;
-            compute_sched->compute_st = COMPUTE_BUSY;
+            compute_sched->compute_st = LT_COMPUTE_BUSY;
 
             _lthread_compute_resume(lt);
 
             compute_sched->current_lthread = NULL;
-            compute_sched->compute_st = COMPUTE_FREE;
+            compute_sched->compute_st = LT_COMPUTE_FREE;
 
             /* resume it back on the  prev scheduler */
-            assert(pthread_mutex_lock(&lt->sched->compute_mutex) == 0);
-            LIST_INSERT_HEAD(&lt->sched->compute, lt, compute_sched_next);
-            assert(pthread_mutex_unlock(&lt->sched->compute_mutex) == 0);
+            assert(pthread_mutex_lock(&lt->sched->defer_mutex) == 0);
+            TAILQ_INSERT_TAIL(&lt->sched->defer, lt, defer_next);
+            lt->state &= CLEARBIT(LT_ST_RUNCOMPUTE);
+            assert(pthread_mutex_unlock(&lt->sched->defer_mutex) == 0);
 
             /* signal the prev scheduler in case it was sleeping in a poll */
             ret = write(lt->sched->compute_pipes[1], "1", 1);
             assert(ret == 1);
-            lt->state &= CLEARBIT(LT_ST_RUNCOMPUTE);
         }
 
         assert(pthread_mutex_lock(&compute_sched->run_mutex) == 0);

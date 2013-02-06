@@ -97,6 +97,8 @@ ssize_t lthread_writev(int fd, struct iovec *iov, int iovcnt);
 int     lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
     struct sf_hdtr *hdtr);
 #endif
+ssize_t lthread_io_write(int fd, void *buf, size_t nbytes);
+ssize_t lthread_io_read(int fd, void *buf, size_t nbytes);
 
 int lthread_compute_begin(void);
 void lthread_compute_end(void);
