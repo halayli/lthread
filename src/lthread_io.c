@@ -29,6 +29,7 @@
 #include <assert.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <errno.h>
 #include "lthread_int.h"
 
 static void _lthread_io_add(struct lthread *lt);
@@ -49,6 +50,8 @@ struct lthread_io_worker {
 
 static void *_lthread_io_worker(void *arg);
 
+static int io_worker_running = 0;
+
 static void
 once_routine(void)
 {
@@ -58,6 +61,11 @@ once_routine(void)
 int
 _lthread_io_worker_init()
 {
+
+    if (io_worker_running > 0) {
+        return (0);
+    }
+
     /* XXX: create pthreads */
     static struct lthread_io_worker io_worker;
     pthread_t pthread;
@@ -65,8 +73,11 @@ _lthread_io_worker_init()
     assert(pthread_mutex_init(&io_worker.lthreads_mutex, NULL) == 0);
     assert(pthread_mutex_init(&io_worker.run_mutex, NULL) == 0);
 
+    io_worker_running = 1;
+
     assert(pthread_create(&pthread,
         NULL, _lthread_io_worker, &io_worker) == 0);
+
     return (0);
 }
 
@@ -103,6 +114,14 @@ _lthread_io_worker(void *arg)
             io_worker->io_st = LT_IO_BUSY;
 
             /* XXX: do read or write */
+            if (lt->state & BIT(LT_ST_WAIT_IO_READ)) {
+                lt->io.ret = read(lt->io.fd, lt->io.buf, lt->io.nbytes);
+                lt->io.err = (lt->io.ret == -1) ? errno : 0;
+            } else if (lt->state & BIT(LT_ST_WAIT_IO_WRITE)) {
+                lt->io.ret = write(lt->io.fd, lt->io.buf, lt->io.nbytes);
+                lt->io.err = (lt->io.ret == -1) ? errno : 0;
+            } else
+                assert(0);
 
             io_worker->io_st = LT_IO_FREE;
 
@@ -155,6 +174,7 @@ lthread_io_read(int fd, void *buf, size_t nbytes)
     struct lthread *lt = lthread_get_sched()->current_lthread;
     lt->state |= BIT(LT_ST_WAIT_IO_READ);
     lt->io.buf = buf;
+    lt->io.fd = fd;
     lt->io.nbytes = nbytes;
 
     _lthread_io_add(lt);
@@ -170,6 +190,7 @@ lthread_io_write(int fd, void *buf, size_t nbytes)
     lt->state |= BIT(LT_ST_WAIT_IO_WRITE);
     lt->io.buf = buf;
     lt->io.nbytes = nbytes;
+    lt->io.fd = fd;
 
     _lthread_io_add(lt);
     lt->state &= CLEARBIT(LT_ST_WAIT_IO_WRITE);

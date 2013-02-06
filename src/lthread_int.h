@@ -133,6 +133,7 @@ struct lthread {
     struct {
         void *buf;
         size_t nbytes;
+        int fd;
         int ret;
         int err;
     } io;
@@ -180,17 +181,6 @@ struct lthread_sched {
     struct lthread_rb_wait  waiting;
 };
 
-struct lthread_compute_sched {
-    char                stack[MAX_STACK_SIZE];
-    struct cpu_ctx      ctx;
-    struct lthread_l    lthreads;
-    struct lthread      *current_lthread;
-    pthread_mutex_t     run_mutex;
-    pthread_cond_t      run_mutex_cond;
-    pthread_mutex_t     lthreads_mutex;
-    LIST_ENTRY(lthread_compute_sched)    compute_next;
-    enum lthread_compute_st compute_st;
-};
 
 int         sched_create(size_t stack_size);
 
@@ -214,6 +204,7 @@ int         _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
 int         _save_exec_state(struct lthread *lt);
 void        _lthread_compute_add(struct lthread *lt);
 int         _lthread_io_worker_init();
+int         _lthread_io_worker_destroy();
 
 extern pthread_key_t lthread_sched_key;
 

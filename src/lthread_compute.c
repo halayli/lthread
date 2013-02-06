@@ -53,6 +53,18 @@ static struct lthread_compute_sched* _lthread_compute_sched_create(void);
 static void _lthread_compute_sched_free(
     struct lthread_compute_sched *compute_sched);
 
+struct lthread_compute_sched {
+    char                stack[MAX_STACK_SIZE];
+    struct cpu_ctx      ctx;
+    struct lthread_l    lthreads;
+    struct lthread      *current_lthread;
+    pthread_mutex_t     run_mutex;
+    pthread_cond_t      run_mutex_cond;
+    pthread_mutex_t     lthreads_mutex;
+    LIST_ENTRY(lthread_compute_sched)    compute_next;
+    enum lthread_compute_st compute_st;
+};
+
 int
 lthread_compute_begin(void)
 {
