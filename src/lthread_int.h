@@ -200,6 +200,7 @@ void        _lthread_compute_add(struct lthread *lt);
 void         _lthread_io_worker_init();
 
 extern pthread_key_t lthread_sched_key;
+void print_timestamp(char *);
 
 static inline struct lthread_sched*
 lthread_get_sched()

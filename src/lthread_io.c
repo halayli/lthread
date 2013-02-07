@@ -37,9 +37,7 @@
 static void _lthread_io_add(struct lthread *lt);
 static void *_lthread_io_worker(void *arg);
 
-static uint32_t io_selector = 0;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
-pthread_mutex_t io_workers_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct lthread_io_worker {
     struct lthread_q    lthreads;
@@ -48,7 +46,7 @@ struct lthread_io_worker {
     pthread_mutex_t     lthreads_mutex;
 };
 
-struct lthread_io_worker io_workers[IO_WORKERS];
+static struct lthread_io_worker io_workers[IO_WORKERS];
 
 static void
 once_routine(void)
@@ -132,6 +130,7 @@ _lthread_io_worker(void *arg)
 static void
 _lthread_io_add(struct lthread *lt)
 {
+    static uint32_t io_selector = 0;
     struct lthread_io_worker *io_worker = &io_workers[io_selector++];
     io_selector = io_selector % IO_WORKERS;
 

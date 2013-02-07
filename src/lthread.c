@@ -37,6 +37,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <sys/time.h>
 
 #include "lthread_time.h"
 #include "lthread_int.h"
@@ -547,4 +548,15 @@ uint64_t
 lthread_id(void)
 {
     return (lthread_get_sched()->current_lthread->id);
+}
+
+/*
+ * convenience function for performance measurement.
+ */
+void
+lthread_print_timestamp(char *msg)
+{
+	struct timeval t1 = {0, 0};
+    gettimeofday(&t1, NULL);
+	printf("lt timestamp: sec: %ld usec: %ld (%s)\n", t1.tv_sec, t1.tv_usec, msg);
 }
