@@ -212,9 +212,10 @@ lthread_run(void)
             fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
             if (fd == sched->defer_pipes[0]) {
                 /* drain pipe */
-                while ((ret = read(fd, &tmp, sizeof(tmp))) > 0);
+                while ((ret = read(fd, tmp, sizeof(tmp))) > 0);
                 if (ret == 0 || (ret == -1 && errno != EAGAIN))
                     assert(0);
+                continue;
             }
 
             is_eof = _lthread_poller_ev_is_eof(&sched->eventlist[p]);
