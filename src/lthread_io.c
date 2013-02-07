@@ -84,7 +84,6 @@ _lthread_io_worker(void *arg)
 
     while (1) {
 
-        /* resume lthreads to run their computation or make a blocking call */
         while (1) {
             assert(pthread_mutex_lock(&io_worker->lthreads_mutex) == 0);
 
