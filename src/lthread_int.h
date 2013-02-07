@@ -81,11 +81,6 @@ enum lthread_compute_st {
     LT_COMPUTE_FREE,
 };
 
-enum lthread_io_st {
-    LT_IO_BUSY,
-    LT_IO_FREE,
-};
-
 enum lthread_st {
     LT_ST_WAIT_READ,    /* lthread waiting for READ on socket */
     LT_ST_WAIT_WRITE,   /* lthread waiting for WRITE on socket */
@@ -124,12 +119,12 @@ struct lthread {
     uint64_t                sleep_usecs;    /* how long lthread is sleeping */
     RB_ENTRY(lthread)       sleep_node;     /* sleep tree node pointer */
     RB_ENTRY(lthread)       wait_node;      /* event tree node pointer */
+    LIST_ENTRY(lthread)     busy_next;      /* blocked lthreads */
     TAILQ_ENTRY(lthread)    ready_next;     /* ready to run list */
     TAILQ_ENTRY(lthread)    defer_next;     /* ready to run after deferred job */
     TAILQ_ENTRY(lthread)    cond_next;      /* waiting on a cond var */
-    LIST_ENTRY(lthread)    busy_next;      /* blocked lthreads */
-    LIST_ENTRY(lthread)     io_next;        /* waiting its turn in io */
-    LIST_ENTRY(lthread)     compute_next;   /* waiting to run in compute sched */
+    TAILQ_ENTRY(lthread)    io_next;        /* waiting its turn in io */
+    TAILQ_ENTRY(lthread)    compute_next;   /* waiting to run in compute sched */
     struct {
         void *buf;
         size_t nbytes;
@@ -202,8 +197,7 @@ inline int  _restore_exec_state(struct lthread *lt);
 int         _switch(struct cpu_ctx *new_ctx, struct cpu_ctx *cur_ctx);
 int         _save_exec_state(struct lthread *lt);
 void        _lthread_compute_add(struct lthread *lt);
-int         _lthread_io_worker_init();
-int         _lthread_io_worker_destroy();
+void         _lthread_io_worker_init();
 
 extern pthread_key_t lthread_sched_key;
 

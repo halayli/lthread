@@ -291,7 +291,7 @@ sched_create(size_t stack_size)
     }
 
     assert(pthread_setspecific(lthread_sched_key, new_sched) == 0);
-    assert(_lthread_io_worker_init() == 0);
+    _lthread_io_worker_init();
 
     if ((new_sched->stack = calloc(1, sched_stack_size)) == NULL) {
         free(new_sched);

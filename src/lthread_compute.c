@@ -56,7 +56,7 @@ static void _lthread_compute_sched_free(
 struct lthread_compute_sched {
     char                stack[MAX_STACK_SIZE];
     struct cpu_ctx      ctx;
-    struct lthread_l    lthreads;
+    struct lthread_q    lthreads;
     struct lthread      *current_lthread;
     pthread_mutex_t     run_mutex;
     pthread_cond_t      run_mutex_cond;
@@ -103,7 +103,7 @@ lthread_compute_begin(void)
 
     lt->state |= BIT(LT_ST_PENDING_RUNCOMPUTE);
     assert(pthread_mutex_lock(&lt->compute_sched->lthreads_mutex) == 0);
-    LIST_INSERT_HEAD(&lt->compute_sched->lthreads, lt, compute_next);
+    TAILQ_INSERT_TAIL(&lt->compute_sched->lthreads, lt, compute_next);
     assert(pthread_mutex_unlock(&lt->compute_sched->lthreads_mutex) == 0);
 
     assert(pthread_mutex_unlock(&sched_mutex) == 0);
@@ -217,7 +217,7 @@ _lthread_compute_sched_create(void)
     }
     assert(pthread_detach(pthread) == 0);
 
-    LIST_INIT(&compute_sched->lthreads);
+    TAILQ_INIT(&compute_sched->lthreads);
 
     return compute_sched;
 }
@@ -293,20 +293,20 @@ _lthread_compute_run(void *arg)
             assert(pthread_mutex_lock(&compute_sched->lthreads_mutex) == 0);
 
             /* we have no work to do, break and wait 60 secs then exit */
-            if (LIST_EMPTY(&compute_sched->lthreads)) {
+            if (TAILQ_EMPTY(&compute_sched->lthreads)) {
                 assert(pthread_mutex_unlock(
                     &compute_sched->lthreads_mutex) == 0);
                 break;
             }
 
-            lt = LIST_FIRST(&compute_sched->lthreads);
+            lt = TAILQ_FIRST(&compute_sched->lthreads);
             if (lt->state & BIT(LT_ST_PENDING_RUNCOMPUTE)) {
                 assert(pthread_mutex_unlock(
                     &compute_sched->lthreads_mutex) == 0);
                 continue;
             }
 
-            LIST_REMOVE(lt, compute_next);
+            TAILQ_REMOVE(&compute_sched->lthreads, lt, compute_next);
 
             assert(pthread_mutex_unlock(&compute_sched->lthreads_mutex) == 0);
 
@@ -345,7 +345,7 @@ _lthread_compute_run(void *arg)
         assert(pthread_mutex_lock(&sched_mutex) == 0);
 
         assert(pthread_mutex_lock(&compute_sched->lthreads_mutex) == 0);
-        if (LIST_EMPTY(&compute_sched->lthreads)) {
+        if (TAILQ_EMPTY(&compute_sched->lthreads)) {
 
             LIST_REMOVE(compute_sched, compute_next);
 

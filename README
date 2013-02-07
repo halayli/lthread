@@ -598,8 +598,3 @@ main(int argc, char **argv)
 }
 
 ```
-
-TODOS
------
-
-- aio support

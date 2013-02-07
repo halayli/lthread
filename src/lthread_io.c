@@ -32,53 +32,49 @@
 #include <errno.h>
 #include "lthread_int.h"
 
-static void _lthread_io_add(struct lthread *lt);
+#define IO_WORKERS 4 
 
+static void _lthread_io_add(struct lthread *lt);
+static void *_lthread_io_worker(void *arg);
+
+static uint32_t io_selector = 0;
 static pthread_key_t io_worker_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
-
-
 pthread_mutex_t io_workers_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 struct lthread_io_worker {
-    struct lthread_l    lthreads;
+    struct lthread_q    lthreads;
     pthread_mutex_t     run_mutex;
     pthread_cond_t      run_mutex_cond;
     pthread_mutex_t     lthreads_mutex;
-    enum lthread_io_st io_st;
 };
 
-static void *_lthread_io_worker(void *arg);
-
-static int io_worker_running = 0;
+struct lthread_io_worker io_workers[IO_WORKERS];
 
 static void
 once_routine(void)
 {
     assert(pthread_key_create(&io_worker_key, NULL) == 0);
+    pthread_t pthread;
+    struct lthread_io_worker *io_worker = NULL;
+    int i = 0;
+
+    for (i = 0; i < IO_WORKERS; i++) {
+        io_worker = &io_workers[i];
+
+        assert(pthread_mutex_init(&io_worker->lthreads_mutex, NULL) == 0);
+        assert(pthread_mutex_init(&io_worker->run_mutex, NULL) == 0);
+        assert(pthread_create(&pthread,
+            NULL, _lthread_io_worker, io_worker) == 0);
+        TAILQ_INIT(&io_worker->lthreads);
+
+    }
 }
 
-int
+void
 _lthread_io_worker_init()
 {
-
-    if (io_worker_running > 0) {
-        return (0);
-    }
-
-    /* XXX: create pthreads */
-    static struct lthread_io_worker io_worker;
-    pthread_t pthread;
-
-    assert(pthread_mutex_init(&io_worker.lthreads_mutex, NULL) == 0);
-    assert(pthread_mutex_init(&io_worker.run_mutex, NULL) == 0);
-
-    io_worker_running = 1;
-
-    assert(pthread_create(&pthread,
-        NULL, _lthread_io_worker, &io_worker) == 0);
-
-    return (0);
+    assert(pthread_once(&key_once, once_routine) == 0);
 }
 
 static void *
@@ -89,7 +85,6 @@ _lthread_io_worker(void *arg)
     struct timespec timeout;
     int status = 0;
     int ret = 0;
-    (void)ret; /* silence compiler */
 
     assert(pthread_once(&key_once, once_routine) == 0);
     assert(pthread_setspecific(io_worker_key, arg) == 0);
@@ -101,19 +96,16 @@ _lthread_io_worker(void *arg)
             assert(pthread_mutex_lock(&io_worker->lthreads_mutex) == 0);
 
             /* we have no work to do, break and wait 60 secs then exit */
-            if (LIST_EMPTY(&io_worker->lthreads)) {
+            if (TAILQ_EMPTY(&io_worker->lthreads)) {
                 assert(pthread_mutex_unlock(&io_worker->lthreads_mutex) == 0);
                 break;
             }
 
-            lt = LIST_FIRST(&io_worker->lthreads);
-            LIST_REMOVE(lt, io_next);
+            lt = TAILQ_FIRST(&io_worker->lthreads);
+            TAILQ_REMOVE(&io_worker->lthreads, lt, io_next);
 
             assert(pthread_mutex_unlock(&io_worker->lthreads_mutex) == 0);
 
-            io_worker->io_st = LT_IO_BUSY;
-
-            /* XXX: do read or write */
             if (lt->state & BIT(LT_ST_WAIT_IO_READ)) {
                 lt->io.ret = read(lt->io.fd, lt->io.buf, lt->io.nbytes);
                 lt->io.err = (lt->io.ret == -1) ? errno : 0;
@@ -122,8 +114,6 @@ _lthread_io_worker(void *arg)
                 lt->io.err = (lt->io.ret == -1) ? errno : 0;
             } else
                 assert(0);
-
-            io_worker->io_st = LT_IO_FREE;
 
             /* resume it back on the  prev scheduler */
             assert(pthread_mutex_lock(&lt->sched->defer_mutex) == 0);
@@ -149,17 +139,18 @@ _lthread_io_worker(void *arg)
 static void
 _lthread_io_add(struct lthread *lt)
 {
-    struct lthread_io_worker io_worker;
+    struct lthread_io_worker *io_worker = &io_workers[io_selector++];
+    io_selector = io_selector % IO_WORKERS;
 
     LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
 
-    assert(pthread_mutex_lock(&io_worker.run_mutex) == 0);
+    assert(pthread_mutex_lock(&io_worker->run_mutex) == 0);
 
-    LIST_INSERT_HEAD(&io_worker.lthreads, lt, io_next);
+    TAILQ_INSERT_TAIL(&io_worker->lthreads, lt, io_next);
 
     /* wakeup pthread if it was sleeping */
-    assert(pthread_cond_signal(&io_worker.run_mutex_cond) == 0);
-    assert(pthread_mutex_unlock(&io_worker.run_mutex) == 0);
+    assert(pthread_cond_signal(&io_worker->run_mutex_cond) == 0);
+    assert(pthread_mutex_unlock(&io_worker->run_mutex) == 0);
 
     _lthread_yield(lt);
 
