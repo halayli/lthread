@@ -142,10 +142,6 @@ _lthread_io_worker(void *arg)
             &io_worker->run_mutex, &timeout);
         assert(pthread_mutex_unlock(&io_worker->run_mutex) == 0);
 
-        /* if we didn't timeout, then we got signaled to do some work */
-        if (status != ETIMEDOUT)
-            continue;
-
     }
 
 }
@@ -166,6 +162,10 @@ _lthread_io_add(struct lthread *lt)
     assert(pthread_mutex_unlock(&io_worker.run_mutex) == 0);
 
     _lthread_yield(lt);
+
+    /* restore errno we got from io worker, if any */
+    if (lt->io.ret == -1)
+        errno = lt->io.err;
 }
 
 ssize_t

@@ -162,7 +162,6 @@ lthread_run(void)
     int fd = 0;
     int ret = 0;
     int is_eof = 0;
-    (void)ret; /* silence compiler */
 
     sched = lthread_get_sched();
     /* scheduler not initiliazed, and no lthreads where created*/
@@ -196,8 +195,10 @@ lthread_run(void)
             _lthread_resume(lt);
         }
 
-        /* 4. check if we received any events after lthread_poll */
+        /* register for pipe notifications from deferred jobs */
         _lthread_poller_ev_register_rd(sched->defer_pipes[0]);
+
+        /* 4. check if we received any events after lthread_poll */
         _lthread_poll();
 
         /* 5. fire up lthreads that are ready to run */
@@ -210,9 +211,10 @@ lthread_run(void)
              */
             fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
             if (fd == sched->defer_pipes[0]) {
-                ret = read(fd, &tmp, sizeof(tmp));
-                assert(ret > 0);
-                continue;
+                /* drain pipe */
+                while ((ret = read(fd, &tmp, sizeof(tmp))) > 0);
+                if (ret == 0 || (ret == -1 && errno != EAGAIN))
+                    assert(0);
             }
 
             is_eof = _lthread_poller_ev_is_eof(&sched->eventlist[p]);

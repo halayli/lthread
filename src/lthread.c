@@ -36,6 +36,7 @@
 #include <inttypes.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 #include "lthread_time.h"
 #include "lthread_int.h"
@@ -312,7 +313,8 @@ sched_create(size_t stack_size)
         return (errno);
     }
 
-    if (pipe(new_sched->defer_pipes) == -1) {
+    if (pipe(new_sched->defer_pipes) == -1 &&
+        fcntl(new_sched->defer_pipes[0], F_SETFL, O_NONBLOCK) == -1) {
         perror("Failed to initialize defer pipe\n");
         _sched_free(new_sched);
         return (errno);
