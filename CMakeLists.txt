@@ -18,6 +18,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${UNIT_TEST_PATH})
 add_executable(lthread_sleep tests/lthread_sleep.c)
 target_link_libraries(lthread_sleep lthread pthread)
 
+add_executable(lthread_io tests/lthread_io.c)
+target_link_libraries(lthread_io lthread pthread)
+
 add_executable(lthread_join tests/lthread_join.c)
 target_link_libraries(lthread_join lthread pthread)
 include_directories(src)

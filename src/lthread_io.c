@@ -32,13 +32,12 @@
 #include <errno.h>
 #include "lthread_int.h"
 
-#define IO_WORKERS 4 
+#define IO_WORKERS 4
 
 static void _lthread_io_add(struct lthread *lt);
 static void *_lthread_io_worker(void *arg);
 
 static uint32_t io_selector = 0;
-static pthread_key_t io_worker_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 pthread_mutex_t io_workers_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -54,7 +53,6 @@ struct lthread_io_worker io_workers[IO_WORKERS];
 static void
 once_routine(void)
 {
-    assert(pthread_key_create(&io_worker_key, NULL) == 0);
     pthread_t pthread;
     struct lthread_io_worker *io_worker = NULL;
     int i = 0;
@@ -82,12 +80,9 @@ _lthread_io_worker(void *arg)
 {
     struct lthread_io_worker *io_worker = arg;
     struct lthread *lt = NULL;
-    struct timespec timeout;
-    int status = 0;
     int ret = 0;
 
     assert(pthread_once(&key_once, once_routine) == 0);
-    assert(pthread_setspecific(io_worker_key, arg) == 0);
 
     while (1) {
 
@@ -95,7 +90,7 @@ _lthread_io_worker(void *arg)
         while (1) {
             assert(pthread_mutex_lock(&io_worker->lthreads_mutex) == 0);
 
-            /* we have no work to do, break and wait 60 secs then exit */
+            /* we have no work to do, break and wait */
             if (TAILQ_EMPTY(&io_worker->lthreads)) {
                 assert(pthread_mutex_unlock(&io_worker->lthreads_mutex) == 0);
                 break;
@@ -126,10 +121,8 @@ _lthread_io_worker(void *arg)
         }
 
         assert(pthread_mutex_lock(&io_worker->run_mutex) == 0);
-        timeout.tv_sec = time(NULL) + 60;
-        timeout.tv_nsec = 0;
-        status = pthread_cond_timedwait(&io_worker->run_mutex_cond,
-            &io_worker->run_mutex, &timeout);
+        pthread_cond_wait(&io_worker->run_mutex_cond,
+            &io_worker->run_mutex);
         assert(pthread_mutex_unlock(&io_worker->run_mutex) == 0);
 
     }
