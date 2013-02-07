@@ -20,7 +20,7 @@ a(void *arg)
     fd = open("/tmp/lthread_io.txt", O_CREAT | O_APPEND | O_WRONLY, 0640);
 	while (i--) {
 		gettimeofday(&t1, NULL);
-		write(fd, line, sizeof(line));
+		lthread_io_write(fd, line, sizeof(line));
 		gettimeofday(&t2, NULL);
         total += ((t2.tv_sec * 1000.0) + t2.tv_usec /1000.0) -
              ((t1.tv_sec * 1000.0) + t1.tv_usec/1000.0);
