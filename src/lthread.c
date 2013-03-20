@@ -231,8 +231,6 @@ _sched_free(struct lthread_sched *sched)
     close(sched->defer_pipes[0]);
     close(sched->defer_pipes[1]);
 
-    free(sched->stack);
-
     pthread_mutex_destroy(&sched->defer_mutex);
 
     free(sched);
@@ -254,14 +252,6 @@ sched_create(size_t stack_size)
 
     assert(pthread_setspecific(lthread_sched_key, new_sched) == 0);
     _lthread_io_worker_init();
-
-    if ((new_sched->stack = calloc(1, sched_stack_size)) == NULL) {
-        free(new_sched);
-        perror("Failed to initialize scheduler\n");
-        return (errno);
-    }
-
-    bzero(new_sched->stack, sched_stack_size);
 
     if ((new_sched->poller_fd = _lthread_poller_create()) == -1) {
         perror("Failed to initialize poller\n");
