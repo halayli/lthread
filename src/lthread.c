@@ -309,7 +309,7 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
         return (errno);
     }
 
-    if ((lt->stack = calloc(1, sched->stack_size)) == NULL) {
+    if (posix_memalign(&lt->stack, getpagesize(), sched->stack_size)) {
         free(lt);
         perror("Failed to allocate stack for new lthread");
         return (errno);
