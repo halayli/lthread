@@ -208,13 +208,13 @@ lthread_get_sched()
     return pthread_getspecific(lthread_sched_key);
 }
 
-inline uint64_t
+static inline uint64_t
 _lthread_diff_usecs(uint64_t t1, uint64_t t2)
 {
     return (t2 - t1);
 }
 
-inline uint64_t
+static inline uint64_t
 _lthread_usec_now(void)
 {
     struct timeval t1 = {0, 0};
