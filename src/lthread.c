@@ -429,7 +429,7 @@ lthread_sleep(uint64_t msecs)
     _lthread_sched_sleep(lt, msecs);
 }
 
-inline void
+void
 _lthread_renice(struct lthread *lt)
 {
     lt->ops++;
