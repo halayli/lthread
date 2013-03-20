@@ -30,13 +30,13 @@
 #ifndef LTHREAD_INT_H
 #define LTHREAD_INT_H
 
+#include <sys/time.h>
 #include <sys/types.h>
 #include <errno.h>
 #include <pthread.h>
 #include <time.h>
 
 #include "lthread_poller.h"
-#include "lthread_time.h"
 #include "queue.h"
 #include "tree.h"
 
@@ -109,7 +109,7 @@ struct lthread {
     struct lthread_sched    *sched;         /* scheduler lthread belongs to */
     uint64_t                birth;          /* time lthread was born */
     uint64_t                id;             /* lthread id */
-    uint64_t                fd_wait;        /* fd we are waiting on */
+    int64_t                 fd_wait;        /* fd we are waiting on */
     char                    funcname[64];   /* optional func name */
     struct lthread          *lt_join;       /* lthread we want to join on */
     void                    **lt_exit_ptr;  /* exit ptr for lthread_join */
@@ -206,6 +206,20 @@ static inline struct lthread_sched*
 lthread_get_sched()
 {
     return pthread_getspecific(lthread_sched_key);
+}
+
+inline uint64_t
+_lthread_diff_usecs(uint64_t t1, uint64_t t2)
+{
+    return (t2 - t1);
+}
+
+inline uint64_t
+_lthread_usec_now(void)
+{
+    struct timeval t1 = {0, 0};
+    gettimeofday(&t1, NULL);
+    return (t1.tv_sec * 1000000) + t1.tv_usec;
 }
 
 #endif

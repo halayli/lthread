@@ -37,7 +37,6 @@
 #include <inttypes.h>
 
 #include "lthread_int.h"
-#include "lthread_time.h"
 #include "tree.h"
 
 #define FD_KEY(f,e) (((int64_t)(f) << (sizeof(int32_t) * 8)) | e)
@@ -122,8 +121,8 @@ _lthread_min_timeout(struct lthread_sched *sched)
     uint64_t t_diff_usecs = 0, min = 0;
     struct lthread *lt = NULL;
 
-    t_diff_usecs = _lthread_tick_diff_usecs(sched->birth,
-        _lthread_rdtsc());
+    t_diff_usecs = _lthread_diff_usecs(sched->birth,
+        _lthread_usec_now());
     min = sched->default_timeout;
 
     lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);
@@ -358,8 +357,8 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
      * if msecs is 0, we won't schedule lthread otherwise loop until
      * collision resolved(very rare) by incrementing usec++.
      */
-    lt->sleep_usecs = _lthread_tick_diff_usecs(lt->sched->birth,
-        _lthread_rdtsc()) + usecs;
+    lt->sleep_usecs = _lthread_diff_usecs(lt->sched->birth,
+        _lthread_usec_now()) + usecs;
     while (msecs) {
         lt_tmp = RB_INSERT(lthread_rb_sleep, &lt->sched->sleeping, lt);
         if (lt_tmp) {
@@ -400,7 +399,7 @@ _lthread_resume_expired(struct lthread_sched *sched)
     uint64_t t_diff_usecs = 0;
 
     /* current scheduler time */
-    t_diff_usecs = _lthread_tick_diff_usecs(sched->birth, _lthread_rdtsc());
+    t_diff_usecs = _lthread_diff_usecs(sched->birth, _lthread_usec_now());
 
     while (1) {
         lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);

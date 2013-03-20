@@ -39,16 +39,16 @@
 #endif
 
 int _lthread_poller_create(void);
-inline int _lthread_poller_poll(struct timespec t);
-inline void _lthread_poller_ev_register_rd(int fd);
-inline void _lthread_poller_ev_register_wr(int fd);
-inline void _lthread_poller_ev_clear_wr(int fd);
-inline void _lthread_poller_ev_clear_rd(int fd);
+int _lthread_poller_poll(struct timespec t);
+void _lthread_poller_ev_register_rd(int fd);
+void _lthread_poller_ev_register_wr(int fd);
+void _lthread_poller_ev_clear_wr(int fd);
+void _lthread_poller_ev_clear_rd(int fd);
 
-inline int _lthread_poller_ev_get_event(POLL_EVENT_TYPE *ev);
-inline int _lthread_poller_ev_get_fd(POLL_EVENT_TYPE *ev);
-inline int _lthread_poller_ev_is_eof(POLL_EVENT_TYPE *ev);
-inline int _lthread_poller_ev_is_read(POLL_EVENT_TYPE *ev);
-inline int _lthread_poller_ev_is_write(POLL_EVENT_TYPE *ev);
+int _lthread_poller_ev_get_event(POLL_EVENT_TYPE *ev);
+int _lthread_poller_ev_get_fd(POLL_EVENT_TYPE *ev);
+int _lthread_poller_ev_is_eof(POLL_EVENT_TYPE *ev);
+int _lthread_poller_ev_is_read(POLL_EVENT_TYPE *ev);
+int _lthread_poller_ev_is_write(POLL_EVENT_TYPE *ev);
 
 #endif

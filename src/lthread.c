@@ -39,7 +39,6 @@
 #include <fcntl.h>
 #include <sys/time.h>
 
-#include "lthread_time.h"
 #include "lthread_int.h"
 #include "lthread_poller.h"
 
@@ -246,7 +245,6 @@ sched_create(size_t stack_size)
     struct lthread_sched *new_sched;
     size_t sched_stack_size = 0;
 
-    _lthread_rdtsc_init();
     sched_stack_size = stack_size ? stack_size : MAX_STACK_SIZE;
 
     if ((new_sched = calloc(1, sizeof(struct lthread_sched))) == NULL) {
@@ -290,7 +288,7 @@ sched_create(size_t stack_size)
     new_sched->default_timeout = 3000000u;
     RB_INIT(&new_sched->sleeping);
     RB_INIT(&new_sched->waiting);
-    new_sched->birth = _lthread_rdtsc();
+    new_sched->birth = _lthread_usec_now();
     TAILQ_INIT(&new_sched->ready);
     TAILQ_INIT(&new_sched->defer);
     LIST_INIT(&new_sched->busy);
@@ -334,7 +332,7 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
     lt->fun = fun;
     lt->fd_wait = -1;
     lt->arg = arg;
-    lt->birth = _lthread_rdtsc();
+    lt->birth = _lthread_usec_now();
     *new_lt = lt;
     TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
 
@@ -499,7 +497,7 @@ lthread_join(struct lthread *lt, void **ptr, uint64_t timeout)
     return (ret);
 }
 
-inline void
+void
 lthread_detach(void)
 {
     struct lthread *current = lthread_get_sched()->current_lthread;

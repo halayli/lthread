@@ -4,9 +4,9 @@ SET(CMAKE_BUILD_TYPE release)
 SET (CMAKE_C_FLAGS_RELEASE "-Werror -g -Wall")
 
 set(lthread_files src/lthread.c src/lthread_socket.c
-                    src/lthread_sched.c src/lthread_io.c
-                    src/lthread_time.c src/lthread_poller.c)
-add_library(lthread  src/lthread_compute.c ${lthread_files})
+                  src/lthread_sched.c src/lthread_io.c
+                  src/lthread_poller.c src/lthread_compute.c)
+add_library(lthread  ${lthread_files})
 set_property(SOURCE ${lthread_files} PROPERTY COMPILE_FLAGS "-O2")
 
 install(TARGETS lthread DESTINATION lib)
@@ -23,7 +23,6 @@ target_link_libraries(lthread_io lthread pthread)
 
 add_executable(lthread_join tests/lthread_join.c)
 target_link_libraries(lthread_join lthread pthread)
-include_directories(src)
 
 enable_testing()
 add_test(lthread_sleep ${UNIT_TEST_PATH}/lthread_sleep)
