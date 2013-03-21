@@ -54,7 +54,6 @@ static void _lthread_compute_sched_free(
     struct lthread_compute_sched *compute_sched);
 
 struct lthread_compute_sched {
-    char                stack[MAX_STACK_SIZE];
     struct cpu_ctx      ctx;
     struct lthread_q    lthreads;
     struct lthread      *current_lthread;
@@ -71,8 +70,6 @@ lthread_compute_begin(void)
     struct lthread_sched *sched = lthread_get_sched();
     struct lthread_compute_sched *compute_sched = NULL, *tmp = NULL;
     struct lthread *lt = sched->current_lthread;
-    void **stack = NULL;
-    void **org_stack = NULL;
 
     /* search for an empty compute_scheduler */
     assert(pthread_mutex_lock(&sched_mutex) == 0);
@@ -111,27 +108,9 @@ lthread_compute_begin(void)
     /* yield function in scheduler to allow other lthreads to run while
      * this lthread runs in a pthread for expensive computations.
      */
-    stack = (void **)(lt->compute_sched->stack + MAX_STACK_SIZE);
-    org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
-
     _switch(&lt->sched->ctx, &lt->ctx);
 
-    /* lthread_compute_begin() was called on the old stack. It pushed
-     * esp to ebp when esp when pointing somewhere in the previous stack.
-     * We need to change ebp to make it relative to the new stack address.
-     * and we'll restore it back on lthread_compute_end.
-     */
-#ifdef __i386__
-    asm("movl 0(%%ebp),%0" : "=r" (lt->ebp) :);
-    asm("movl %0, 0(%%ebp)\n" ::"a"((void *)((intptr_t)stack - \
-        ((intptr_t)org_stack - (intptr_t)lt->ebp))));
-#elif defined(__x86_64__)
-    asm("movq 0(%%rbp),%0" : "=r" (lt->ebp) :);
-    asm("movq %0, 0(%%rbp)\n" ::"a"((void *)((intptr_t)stack - \
-        ((intptr_t)org_stack - (intptr_t)lt->ebp))));
-#endif
-
-    return 0;
+    return (0);
 }
 
 void
@@ -143,31 +122,13 @@ lthread_compute_end(void)
     struct lthread *lt = compute_sched->current_lthread;
     assert(compute_sched != NULL);
     _switch(&compute_sched->ctx, &lt->ctx);
-    /* restore ebp back to its relative old stack address */
-#ifdef __i386__
-    asm("movl %0, 0(%%ebp)\n" ::"a"(lt->ebp));
-#elif defined(__x86_64__)
-    asm("movq %0, 0(%%rbp)\n" ::"a"(lt->ebp));
-#endif
 }
 
 void
 _lthread_compute_add(struct lthread *lt)
 {
 
-    void **stack = NULL;
-    void **org_stack = NULL;
-
-    stack = (void **)(lt->compute_sched->stack + MAX_STACK_SIZE);
-    org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
-
     LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
-    /* change ebp esp to be relative to the new stack address */
-    lt->ctx.ebp = lt->compute_sched->ctx.ebp = (void*)((intptr_t)stack - \
-         ((intptr_t)org_stack - (intptr_t)(lt->ctx.ebp)));
-    lt->ctx.esp = lt->compute_sched->ctx.esp = (void*)((intptr_t)stack - \
-        lt->stack_size);
-
     /*
      * lthread is in scheduler list at this point. lock mutex to change
      * state since the state is checked in scheduler as well.
@@ -222,49 +183,10 @@ _lthread_compute_sched_create(void)
     return compute_sched;
 }
 
-
-static int
-_lthread_compute_save_exec_state(struct lthread *lt)
-{
-    void *stack_top = NULL;
-    void **stack = NULL;
-    void **org_stack = NULL;
-    size_t size = 0;
-
-    stack_top = lt->compute_sched->stack + MAX_STACK_SIZE;
-    size = stack_top - lt->ctx.esp;
-
-    if (size && lt->stack_size != size) {
-        if (lt->stack)
-            free(lt->stack);
-        if ((lt->stack = calloc(1, size)) == NULL) {
-            perror("Failed to allocate memory to save stack\n");
-            abort();
-            return errno;
-        }
-    }
-
-    lt->stack_size = size;
-    if (size)
-        memcpy(lt->stack, lt->ctx.esp, size);
-
-    stack = (void **)(lt->compute_sched->stack + MAX_STACK_SIZE);
-    org_stack = (void **)(lt->sched->stack + lt->sched->stack_size);
-
-    /* change ebp & esp back to be relative to the old stack address */
-    lt->ctx.ebp = (void*)((intptr_t)org_stack - ((intptr_t)stack - \
-        (intptr_t)(lt->ctx.ebp)));
-    lt->ctx.esp = (void*)((intptr_t)org_stack - lt->stack_size);
-
-    return 0;
-}
-
 static void
 _lthread_compute_resume(struct lthread *lt)
 {
-    _restore_exec_state(lt);
     _switch(&lt->ctx, &lt->compute_sched->ctx);
-    _lthread_compute_save_exec_state(lt);
 }
 
 static void

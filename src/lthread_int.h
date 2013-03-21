@@ -41,7 +41,7 @@
 #include "tree.h"
 
 #define LT_MAX_EVENTS    (1024)
-#define MAX_STACK_SIZE (8*1024*1024)
+#define MAX_STACK_SIZE (128*1024) /* 128k */
 
 #define BIT(x) (1 << (x))
 #define CLEARBIT(x) ~(1 << (x))

@@ -162,8 +162,6 @@ _lthread_resume(struct lthread *lt)
     if (lt->state & BIT(LT_ST_NEW))
         _lthread_init(lt);
 
-    _restore_exec_state(lt);
-
     sched->current_lthread = lt;
     _switch(&lt->ctx, &lt->sched->ctx);
     sched->current_lthread = NULL;
@@ -181,7 +179,6 @@ _lthread_resume(struct lthread *lt)
             _lthread_free(lt);
         return (-1);
     } else {
-        _save_exec_state(lt);
         /* place it in a compute scheduler if needed. */
         if (lt->state & BIT(LT_ST_PENDING_RUNCOMPUTE)) {
             _lthread_compute_add(lt);
@@ -217,7 +214,7 @@ static void
 _lthread_init(struct lthread *lt)
 {
     void **stack = NULL;
-    stack = (void **)(lt->sched->stack + (lt->sched->stack_size));
+    stack = (void **)(lt->stack + (lt->stack_size));
 
     stack[-3] = NULL;
     stack[-2] = (void *)lt;
@@ -225,40 +222,6 @@ _lthread_init(struct lthread *lt)
     lt->ctx.ebp = (void *)stack - (3 * sizeof(void *));
     lt->ctx.eip = (void *)_exec;
     lt->state = BIT(LT_ST_READY);
-}
-
-inline int
-_restore_exec_state(struct lthread *lt)
-{
-    if (lt->stack_size)
-        memcpy(lt->ctx.esp, lt->stack, lt->stack_size);
-
-    return (0);
-}
-
-int
-_save_exec_state(struct lthread *lt)
-{
-    void *stack_top = NULL;
-    size_t size = 0;
-
-    stack_top = lt->sched->stack + lt->sched->stack_size;
-    size = stack_top - lt->ctx.esp;
-
-    if (size && lt->stack_size != size) {
-        if (lt->stack)
-            free(lt->stack);
-        if ((lt->stack = calloc(1, size)) == NULL) {
-            perror("Failed to allocate memory to save stack\n");
-            abort();
-        }
-    }
-
-    lt->stack_size = size;
-    if (size)
-        memcpy(lt->stack, lt->ctx.esp, size);
-
-    return (0);
 }
 
 void
@@ -358,8 +321,14 @@ lthread_create(struct lthread **new_lt, void *fun, void *arg)
         return (errno);
     }
 
+    if ((lt->stack = calloc(1, sched->stack_size)) == NULL) {
+        free(lt);
+        perror("Failed to allocate stack for new lthread");
+        return (errno);
+    }
+
     lt->sched = sched;
-    lt->stack_size = 0;
+    lt->stack_size = sched->stack_size;
     lt->state = BIT(LT_ST_NEW);
     lt->id = sched->spawned_lthreads++;
     lt->fun = fun;

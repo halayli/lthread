@@ -88,7 +88,6 @@ _lthread_poll(void)
     int ret = 0;
     uint64_t usecs = 0;
 
-
     sched->num_new_events = 0;
     usecs = _lthread_min_timeout(sched);
 
