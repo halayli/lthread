@@ -158,9 +158,8 @@ struct lthread_sched {
     int                 poller_fd;
 #if defined(__FreeBSD__) || defined(__APPLE__)
     struct kevent       changelist[LT_MAX_EVENTS];
-#else
-    int                 eventfd;
 #endif
+    int                 eventfd;
     POLL_EVENT_TYPE     eventlist[LT_MAX_EVENTS];
     int                 nevents;
     int                 num_new_events;

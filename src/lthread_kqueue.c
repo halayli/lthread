@@ -87,6 +87,7 @@ _lthread_poller_ev_register_rd(int fd)
         _lthread_poller_flush_events();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_READ,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
+    sched->eventfd =  -1;
 }
 
 inline void
