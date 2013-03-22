@@ -133,13 +133,12 @@ _lthread_io_add(struct lthread *lt)
 
     LIST_INSERT_HEAD(&lt->sched->busy, lt, busy_next);
 
-    assert(pthread_mutex_lock(&io_worker->run_mutex) == 0);
-
+    assert(pthread_mutex_lock(&io_worker->lthreads_mutex) == 0);
     TAILQ_INSERT_TAIL(&io_worker->lthreads, lt, io_next);
+    assert(pthread_mutex_unlock(&io_worker->lthreads_mutex) == 0);
 
     /* wakeup pthread if it was sleeping */
     assert(pthread_cond_signal(&io_worker->run_mutex_cond) == 0);
-    assert(pthread_mutex_unlock(&io_worker->run_mutex) == 0);
 
     _lthread_yield(lt);
 
