@@ -200,10 +200,10 @@ _lthread_madvise(struct lthread *lt)
 
     /* 
      * free up stack space we no longer use. As long as we were using more than
-     * 512 bytes. I don't see a point in calling madvise on anything less than
-     * that.
+     * pagesize bytes.
      */
-    if (current_stack < lt->last_stack_size && lt->last_stack_size > 512) {
+    if (current_stack < lt->last_stack_size &&
+        lt->last_stack_size > lt->sched->page_size) {
         /* round up to the nearest page size */
         tmp = current_stack + (-current_stack & (lt->sched->page_size - 1));
         assert(madvise(lt->stack, lt->stack_size - tmp, MADV_DONTNEED) == 0);
