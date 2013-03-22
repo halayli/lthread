@@ -204,10 +204,17 @@ lthread_run(void)
              * We got signaled via trigger to wakeup from polling & rusume file io.
              * Those lthreads will get handled in step 4.
              */
+#if defined(__FreeBSD__) || defined(__APPLE__)
             if (fd == -1) {
                 _lthread_poller_ev_clear_trigger();
                 continue;
             }
+#else
+            if (fd == sched->eventfd) {
+                _lthread_poller_ev_clear_trigger();
+                continue;
+            }
+#endif
 
             is_eof = _lthread_poller_ev_is_eof(&sched->eventlist[p]);
             if (is_eof)

@@ -194,6 +194,7 @@ static inline void
 _lthread_madvise(struct lthread *lt)
 {
     size_t current_stack = (lt->stack + lt->stack_size) - lt->ctx.esp;
+    size_t tmp;
     /* make sure function did not overflow stack, we can't recover from that */
     assert(current_stack <= lt->stack_size);
 
@@ -202,8 +203,11 @@ _lthread_madvise(struct lthread *lt)
      * 512 bytes. I don't see a point in calling madvise on anything less than
      * that.
      */
-    if (current_stack < lt->last_stack_size && lt->last_stack_size > 512)
-        madvise(lt->stack + current_stack, lt->stack_size, MADV_DONTNEED);
+    if (current_stack < lt->last_stack_size && lt->last_stack_size > 512) {
+        /* round up to the nearest page size */
+        tmp = current_stack + (-current_stack & (lt->sched->page_size - 1));
+        assert(madvise(lt->stack, lt->stack_size - tmp, MADV_DONTNEED) == 0);
+    }
 
     lt->last_stack_size = current_stack;
 }
@@ -249,6 +253,9 @@ _sched_free(struct lthread_sched *sched)
 {
     close(sched->poller_fd);
 
+#if ! (defined(__FreeBSD__) && defined(__APPLE__))
+    close(sched->eventfd);
+#endif
     pthread_mutex_destroy(&sched->defer_mutex);
 
     free(sched);
@@ -285,6 +292,7 @@ sched_create(size_t stack_size)
     }
 
     new_sched->stack_size = sched_stack_size;
+    new_sched->page_size = getpagesize();
 
     new_sched->spawned_lthreads = 0;
     new_sched->default_timeout = 3000000u;

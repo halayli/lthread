@@ -153,10 +153,13 @@ struct lthread_sched {
     int                 spawned_lthreads;
     uint64_t            default_timeout;
     struct lthread      *current_lthread;
+    int                 page_size;
     /* poller variables */
     int                 poller_fd;
 #if defined(__FreeBSD__) || defined(__APPLE__)
     struct kevent       changelist[LT_MAX_EVENTS];
+#else
+    int                 eventfd;
 #endif
     POLL_EVENT_TYPE     eventlist[LT_MAX_EVENTS];
     int                 nevents;

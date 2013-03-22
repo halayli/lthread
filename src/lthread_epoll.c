@@ -29,6 +29,8 @@
 #include "lthread_int.h"
 #include <assert.h>
 #include <string.h>
+#include <sys/eventfd.h>
+#include <unistd.h>
 
 int
 _lthread_poller_create(void)
@@ -129,4 +131,36 @@ inline int
 _lthread_poller_ev_is_read(struct epoll_event *ev)
 {
     return (ev->events & EPOLLIN);
+}
+
+inline void
+_lthread_poller_ev_register_trigger(void)
+{
+    struct lthread_sched *sched = lthread_get_sched();
+    int ret = 0;
+    struct epoll_event ev;
+
+    if (!sched->eventfd) {
+        sched->eventfd = eventfd(0, EFD_NONBLOCK);
+        assert(sched->eventfd != -1);
+    }
+    ev.events = EPOLLIN;
+    ev.data.fd = sched->eventfd;
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_ADD, sched->eventfd, &ev);
+    assert(ret != -1);
+}
+
+inline void
+_lthread_poller_ev_clear_trigger(void)
+{
+    uint64_t tmp;
+    struct lthread_sched *sched = lthread_get_sched();
+    assert(read(sched->eventfd, &tmp, sizeof(uint64_t)) == sizeof(uint64_t));
+}
+
+inline void
+_lthread_poller_ev_trigger(struct lthread_sched *sched)
+{
+    uint64_t tmp = 2;
+    assert(write(sched->eventfd, &tmp, sizeof(uint64_t)) == sizeof(uint64_t));
 }
