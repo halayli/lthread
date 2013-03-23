@@ -14,6 +14,7 @@ install(FILES src/lthread.h DESTINATION include)
 
 set(UNIT_TEST_PATH ${CMAKE_SOURCE_DIR}/tests)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${UNIT_TEST_PATH})
+include_directories(src)
 
 add_executable(lthread_sleep tests/lthread_sleep.c)
 target_link_libraries(lthread_sleep lthread pthread)
