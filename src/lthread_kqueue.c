@@ -35,11 +35,9 @@ _lthread_poller_flush_events(void)
 {
     struct lthread_sched *sched = lthread_get_sched();
     struct timespec tm = {0, 0};
-    int ret = 0;
 
-    ret = kevent(sched->poller_fd, sched->changelist,
-        sched->nevents, NULL, 0, &tm);
-    assert(ret == 0);
+    assert(kevent(sched->poller_fd, sched->changelist,
+        sched->nevents, NULL, 0, &tm) == 0);
     sched->nevents = 0;
 }
 
@@ -63,12 +61,10 @@ _lthread_poller_ev_clear_rd(int fd)
     struct kevent change;
     struct kevent event;
     struct timespec tm = {0, 0};
-    int ret = 0;
     struct lthread_sched *sched = lthread_get_sched();
 
     EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-    ret = kevent(sched->poller_fd, &change, 1, &event, 0, &tm);
-    assert(ret == 1);
+    assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) == 1);
 }
 
 inline void
@@ -77,12 +73,10 @@ _lthread_poller_ev_clear_wr(int fd)
     struct kevent change;
     struct kevent event;
     struct timespec tm = {0, 0};
-    int ret = 0;
     struct lthread_sched *sched = lthread_get_sched();
 
     EV_SET(&change, fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
-    ret = kevent(sched->poller_fd, &change, 1, &event, 0, &tm);
-    assert(ret == 1);
+    assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) == 1);
 }
 
 inline void
@@ -103,6 +97,41 @@ _lthread_poller_ev_register_wr(int fd)
         _lthread_poller_flush_events();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_WRITE,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
+}
+
+inline void
+_lthread_poller_ev_register_trigger(void)
+{
+    struct lthread_sched *sched = lthread_get_sched();
+    struct kevent change;
+    struct kevent event;
+    struct timespec tm = {0, 0};
+
+    EV_SET(&change, -1, EVFILT_USER, EV_ADD, 0, 0, 0);
+    assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) != -1);
+}
+
+inline void
+_lthread_poller_ev_clear_trigger(void)
+{
+    struct lthread_sched *sched = lthread_get_sched();
+    struct kevent change;
+    struct kevent event;
+    struct timespec tm = {0, 0};
+
+    EV_SET(&change, -1, EVFILT_USER, 0, EV_CLEAR, 0, 0);
+    assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) != -1);
+}
+
+inline void
+_lthread_poller_ev_trigger(struct lthread_sched *sched)
+{
+    struct kevent change;
+    struct kevent event;
+    struct timespec tm = {0, 0};
+
+    EV_SET(&change, -1, EVFILT_USER, 0, NOTE_TRIGGER, 0, 0);
+    assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) != -1);
 }
 
 inline int

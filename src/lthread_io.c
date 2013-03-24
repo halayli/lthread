@@ -78,7 +78,6 @@ _lthread_io_worker(void *arg)
 {
     struct lthread_io_worker *io_worker = arg;
     struct lthread *lt = NULL;
-    int ret = 0;
 
     assert(pthread_once(&key_once, once_routine) == 0);
 
@@ -113,8 +112,7 @@ _lthread_io_worker(void *arg)
             assert(pthread_mutex_unlock(&lt->sched->defer_mutex) == 0);
 
             /* signal the prev scheduler in case it was sleeping in a poll */
-            ret = write(lt->sched->defer_pipes[1], "1", 1);
-            assert(ret == 1);
+            _lthread_poller_ev_trigger(lt->sched);
         }
 
         assert(pthread_mutex_lock(&io_worker->run_mutex) == 0);

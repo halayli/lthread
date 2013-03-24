@@ -247,8 +247,7 @@ _lthread_compute_run(void *arg)
             assert(pthread_mutex_unlock(&lt->sched->defer_mutex) == 0);
 
             /* signal the prev scheduler in case it was sleeping in a poll */
-            ret = write(lt->sched->defer_pipes[1], "1", 1);
-            assert(ret == 1);
+            _lthread_poller_ev_trigger(lt->sched);
         }
 
         assert(pthread_mutex_lock(&compute_sched->run_mutex) == 0);

@@ -38,12 +38,16 @@
 #define POLL_EVENT_TYPE struct epoll_event
 #endif
 
+struct lthread_sched;
 int _lthread_poller_create(void);
 int _lthread_poller_poll(struct timespec t);
 void _lthread_poller_ev_register_rd(int fd);
 void _lthread_poller_ev_register_wr(int fd);
 void _lthread_poller_ev_clear_wr(int fd);
 void _lthread_poller_ev_clear_rd(int fd);
+void _lthread_poller_ev_register_trigger(void);
+void _lthread_poller_ev_trigger(struct lthread_sched *sched);
+void _lthread_poller_ev_clear_trigger(void);
 
 int _lthread_poller_ev_get_event(POLL_EVENT_TYPE *ev);
 int _lthread_poller_ev_get_fd(POLL_EVENT_TYPE *ev);

@@ -228,9 +228,6 @@ _sched_free(struct lthread_sched *sched)
 {
     close(sched->poller_fd);
 
-    close(sched->defer_pipes[0]);
-    close(sched->defer_pipes[1]);
-
     pthread_mutex_destroy(&sched->defer_mutex);
 
     free(sched);
@@ -258,16 +255,10 @@ sched_create(size_t stack_size)
         _sched_free(new_sched);
         return (errno);
     }
+    _lthread_poller_ev_register_trigger();
 
     if (pthread_mutex_init(&new_sched->defer_mutex, NULL) != 0) {
         perror("Failed to initialize defer_mutex\n");
-        _sched_free(new_sched);
-        return (errno);
-    }
-
-    if (pipe(new_sched->defer_pipes) == -1 ||
-        fcntl(new_sched->defer_pipes[0], F_SETFL, O_NONBLOCK) == -1) {
-        perror("Failed to initialize defer pipe\n");
         _sched_free(new_sched);
         return (errno);
     }

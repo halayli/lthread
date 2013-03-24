@@ -75,7 +75,6 @@ static int  _lthread_poll(void);
 static void _lthread_resume_expired(struct lthread_sched *sched);
 static inline int _lthread_sched_isdone(struct lthread_sched *sched);
 
-static char tmp[100];
 static struct lthread find_lt;
 
 static int
@@ -158,11 +157,10 @@ lthread_run(void)
     struct lthread *lt_read = NULL, *lt_write = NULL;
     int p = 0;
     int fd = 0;
-    int ret = 0;
     int is_eof = 0;
 
     sched = lthread_get_sched();
-    /* scheduler not initiliazed, and no lthreads where created*/
+    /* scheduler not initiliazed, and no lthreads where created */
     if (sched == NULL)
         return;
 
@@ -193,9 +191,6 @@ lthread_run(void)
             _lthread_resume(lt);
         }
 
-        /* register for pipe notifications from deferred jobs */
-        _lthread_poller_ev_register_rd(sched->defer_pipes[0]);
-
         /* 4. check if we received any events after lthread_poll */
         _lthread_poll();
 
@@ -203,16 +198,14 @@ lthread_run(void)
         while (sched->num_new_events) {
             p = --sched->num_new_events;
 
+            fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
+
             /* 
-             * We got signaled via pipe to wakeup from polling & rusume file io.
+             * We got signaled via trigger to wakeup from polling & rusume file io.
              * Those lthreads will get handled in step 4.
              */
-            fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
-            if (fd == sched->defer_pipes[0]) {
-                /* drain pipe */
-                while ((ret = read(fd, tmp, sizeof(tmp))) > 0);
-                if (ret == 0 || (ret == -1 && errno != EAGAIN))
-                    assert(0);
+            if (fd == -1) {
+                _lthread_poller_ev_clear_trigger();
                 continue;
             }
 
