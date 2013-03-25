@@ -87,7 +87,6 @@ _lthread_poller_ev_register_rd(int fd)
         _lthread_poller_flush_events();
     EV_SET(&sched->changelist[sched->nevents++], fd, EVFILT_READ,
         EV_ADD | EV_ENABLE | EV_ONESHOT, 0, 0, sched->current_lthread);
-    sched->eventfd =  -1;
 }
 
 inline void
@@ -110,6 +109,7 @@ _lthread_poller_ev_register_trigger(void)
 
     EV_SET(&change, -1, EVFILT_USER, EV_ADD, 0, 0, 0);
     assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) != -1);
+    sched->eventfd =  -1;
 }
 
 inline void
