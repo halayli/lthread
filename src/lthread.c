@@ -38,6 +38,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <sys/time.h>
+#include <sys/mman.h>
 
 #include "lthread_int.h"
 #include "lthread_poller.h"
@@ -47,6 +48,7 @@ extern int errno;
 static void _exec(void *lt);
 static void _lthread_init(struct lthread *lt);
 static void _lthread_key_create(void);
+static inline void _lthread_madvise(struct lthread *lt);
 
 pthread_key_t lthread_sched_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
@@ -164,6 +166,7 @@ _lthread_resume(struct lthread *lt)
     sched->current_lthread = lt;
     _switch(&lt->ctx, &lt->sched->ctx);
     sched->current_lthread = NULL;
+    _lthread_madvise(lt);
 
     if (lt->state & BIT(LT_ST_EXITED)) {
         if (lt->lt_join) {
@@ -185,6 +188,24 @@ _lthread_resume(struct lthread *lt)
     }
 
     return (0);
+}
+
+static inline void
+_lthread_madvise(struct lthread *lt)
+{
+    size_t current_stack = (lt->stack + lt->stack_size) - lt->ctx.esp;
+    /* make sure function did not overflow stack, we can't recover from that */
+    assert(current_stack <= lt->stack_size);
+
+    /* 
+     * free up stack space we no longer use. As long as we were using more than
+     * 512 bytes. I don't see a point in calling madvise on anything less than
+     * that.
+     */
+    if (current_stack < lt->last_stack_size && lt->last_stack_size > 512)
+        madvise(lt->stack + current_stack, lt->stack_size, MADV_DONTNEED);
+
+    lt->last_stack_size = current_stack;
 }
 
 static void

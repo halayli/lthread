@@ -105,6 +105,7 @@ struct lthread {
     void                    *arg;           /* func args passed to func */
     void                    *data;          /* user ptr attached to lthread */
     size_t                  stack_size;     /* current stack_size */
+    size_t                  last_stack_size; /* last yield  stack_size */
     enum lthread_st         state;          /* current lthread state */
     struct lthread_sched    *sched;         /* scheduler lthread belongs to */
     uint64_t                birth;          /* time lthread was born */
