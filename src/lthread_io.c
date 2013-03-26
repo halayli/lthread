@@ -32,7 +32,7 @@
 #include <errno.h>
 #include "lthread_int.h"
 
-#define IO_WORKERS 4
+#define IO_WORKERS 2
 
 static void _lthread_io_add(struct lthread *lt);
 static void *_lthread_io_worker(void *arg);
@@ -138,7 +138,9 @@ _lthread_io_add(struct lthread *lt)
     assert(pthread_mutex_unlock(&io_worker->lthreads_mutex) == 0);
 
     /* wakeup pthread if it was sleeping */
+    assert(pthread_mutex_lock(&io_worker->run_mutex) == 0);
     assert(pthread_cond_signal(&io_worker->run_mutex_cond) == 0);
+    assert(pthread_mutex_unlock(&io_worker->run_mutex) == 0);
 
     _lthread_yield(lt);
 
