@@ -296,7 +296,7 @@ _lthread_sched_event(struct lthread *lt, int fd, enum lthread_event e,
     struct lthread *lt_tmp = NULL;
     enum lthread_st st;
     if (lt->state & BIT(LT_ST_WAIT_READ) || lt->state & BIT(LT_ST_WAIT_WRITE)) {
-        printf("Unexpected event. lt id %"PRIu64" fd %ld already in %d state\n",
+        printf("Unexpected event. lt id %"PRIu64" fd %"PRId64" already in %"PRId32" state\n",
             lt->id, lt->fd_wait, lt->state);
         assert(0);
     }
