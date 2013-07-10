@@ -535,5 +535,5 @@ lthread_print_timestamp(char *msg)
 {
 	struct timeval t1 = {0, 0};
     gettimeofday(&t1, NULL);
-	printf("lt timestamp: sec: %ld usec: %ld (%s)\n", t1.tv_sec, t1.tv_usec, msg);
+	printf("lt timestamp: sec: %ld usec: %ld (%s)\n", t1.tv_sec, (long) t1.tv_usec, msg);
 }
