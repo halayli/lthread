@@ -56,7 +56,7 @@ _lthread_poller_ev_clear_rd(int fd)
 
     ev.data.fd = fd;
     ev.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
-    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_MOD, fd, &ev);
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_DEL, fd, &ev);
     assert(ret != -1);
 }
 
@@ -69,7 +69,7 @@ _lthread_poller_ev_clear_wr(int fd)
 
     ev.data.fd = fd;
     ev.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
-    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_MOD, fd, &ev);
+    ret = epoll_ctl(sched->poller_fd, EPOLL_CTL_DEL, fd, &ev);
     assert(ret != -1);
 }
 
