@@ -101,11 +101,16 @@ _lthread_poll(void)
         t.tv_sec = 0;
     }
 
-    ret = _lthread_poller_poll(t);
 
-    if (ret == -1) {
-        perror("error adding events to kevent");
-        assert(0);
+    while (1) {
+        ret = _lthread_poller_poll(t);
+        if (ret == -1 && errno == EINTR) {
+            continue;
+        } else if (ret == -1) {
+            perror("error adding events to epoll/kqueue");
+            assert(0);
+        }
+        break;
     }
 
     sched->nevents = 0;
