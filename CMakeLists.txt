@@ -7,9 +7,12 @@ set(lthread_files src/lthread.c src/lthread_socket.c
                   src/lthread_sched.c src/lthread_io.c
                   src/lthread_poller.c src/lthread_compute.c)
 add_library(lthread  ${lthread_files})
+add_library(lthread_shared SHARED ${lthread_files})
+set_target_properties(lthread_shared PROPERTIES OUTPUT_NAME lthread)
 set_property(SOURCE ${lthread_files} PROPERTY COMPILE_FLAGS "-O2")
 
 install(TARGETS lthread DESTINATION lib)
+install(TARGETS lthread_shared DESTINATION lib)
 install(FILES src/lthread.h DESTINATION include)
 
 set(UNIT_TEST_PATH ${CMAKE_SOURCE_DIR}/tests)
