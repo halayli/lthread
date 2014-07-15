@@ -56,6 +56,7 @@ void    lthread_cancel(lthread_t *lt);
 void    lthread_run(void);
 int     lthread_join(lthread_t *lt, void **ptr, uint64_t timeout);
 void    lthread_detach(void);
+void    lthread_exit(void *ptr);
 void    lthread_sleep(uint64_t msecs);
 void    lthread_wakeup(lthread_t *lt);
 int     lthread_cond_create(lthread_cond_t **c);
