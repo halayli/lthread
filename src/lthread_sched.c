@@ -228,7 +228,7 @@ lthread_run(void)
                 } else {
                     lt_read->ready_fds++;
                     if (lt_read->ready_fds == 1)
-                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt_read, ready_next);
+                        TAILQ_INSERT_TAIL(&sched->ready, lt_read, ready_next);
                 }
             }
 
@@ -241,7 +241,7 @@ lthread_run(void)
                 } else {
                     lt_write->ready_fds++;
                     if (lt_write->ready_fds == 1)
-                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt_write, ready_next);
+                        TAILQ_INSERT_TAIL(&sched->ready, lt_write, ready_next);
                 }
 
             }
