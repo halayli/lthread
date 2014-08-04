@@ -469,12 +469,12 @@ lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
     lt->state |= BIT(LT_ST_WAIT_MULTI);
 
     /* go to sleep until one or more of the fds are ready or until we timeout */
-    _lthread_sched_sleep(lt, (uint64_t) timeout);
+    _lthread_sched_sleep(lt, (uint64_t)timeout);
     lt->state &= CLEARBIT(LT_ST_WAIT_MULTI);
 
     /* 
      * not all scheduled fds in the poller are guaranteed to have triggered,
-     * deschedule them all and cancel events in poller  so they don't trigger later.
+     * deschedule them all and cancel events in poller so they don't trigger later.
      */
     for (i = 0; i < nfds; i++)
         if (fds[i].events & POLLIN) {
@@ -486,7 +486,7 @@ lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
         }
 
     if (lt->state & BIT(LT_ST_EXPIRED))
-        return (-2);
+        return (0);
 
-    return lt->ready_fds;
+    return (lt->ready_fds);
 }
