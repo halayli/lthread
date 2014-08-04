@@ -226,6 +226,13 @@ lthread_run(void)
                 if (!(lt_read->state & BIT(LT_ST_WAIT_MULTI))) {
                     _lthread_resume(lt_read);
                 } else {
+                    /* 
+                     * this lthread was waiting on multiple events, increment ready_fds
+                     * and place it on the ready queue to resume after we finished counting
+                     * all ready fds  that the lthread was waiting on. This is to emulate
+                     * poll(2) return call.
+                     * same thing for lt_write.
+                     */
                     lt_read->ready_fds++;
                     if (lt_read->ready_fds == 1)
                         TAILQ_INSERT_TAIL(&sched->ready, lt_read, ready_next);
