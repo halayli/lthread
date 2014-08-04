@@ -227,8 +227,8 @@ lthread_run(void)
                     _lthread_resume(lt_read);
                 } else {
                     lt_read->ready_fds++;
-                    if (lt->ready_fds == 1)
-                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
+                    if (lt_read->ready_fds == 1)
+                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt_read, ready_next);
                 }
             }
 
@@ -239,9 +239,9 @@ lthread_run(void)
                 if (!(lt_write->state & BIT(LT_ST_WAIT_MULTI))) {
                     _lthread_resume(lt_write);
                 } else {
-                    lt_read->ready_fds++;
-                    if (lt->ready_fds == 1)
-                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
+                    lt_write->ready_fds++;
+                    if (lt_write->ready_fds == 1)
+                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt_write, ready_next);
                 }
 
             }
