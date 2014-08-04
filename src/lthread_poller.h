@@ -37,6 +37,7 @@
 #include <sys/epoll.h>
 #define POLL_EVENT_TYPE struct epoll_event
 #endif
+#include <poll.h>
 
 struct lthread_sched;
 int _lthread_poller_create(void);

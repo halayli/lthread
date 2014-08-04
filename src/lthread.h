@@ -34,6 +34,7 @@
 #include <fcntl.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <poll.h>
 
 #define DEFINE_LTHREAD (lthread_set_funcname(__func__))
 
@@ -100,6 +101,7 @@ int     lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
 #endif
 ssize_t lthread_io_write(int fd, void *buf, size_t nbytes);
 ssize_t lthread_io_read(int fd, void *buf, size_t nbytes);
+int lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout);
 
 int lthread_compute_begin(void);
 void lthread_compute_end(void);

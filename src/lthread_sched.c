@@ -222,14 +222,28 @@ lthread_run(void)
             if (lt_read != NULL) {
                 if (is_eof)
                     lt_read->state |= BIT(LT_ST_FDEOF);
-                _lthread_resume(lt_read);
+
+                if (!(lt_read->state & BIT(LT_ST_WAIT_MULTI))) {
+                    _lthread_resume(lt_read);
+                } else {
+                    lt_read->ready_fds++;
+                    if (lt->ready_fds == 1)
+                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
+                }
             }
 
             lt_write = _lthread_desched_event(fd, LT_EV_WRITE);
             if (lt_write != NULL) {
                 if (is_eof)
                     lt_write->state |= BIT(LT_ST_FDEOF);
-                _lthread_resume(lt_write);
+                if (!(lt_write->state & BIT(LT_ST_WAIT_MULTI))) {
+                    _lthread_resume(lt_write);
+                } else {
+                    lt_read->ready_fds++;
+                    if (lt->ready_fds == 1)
+                        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
+                }
+
             }
             is_eof = 0;
 
@@ -312,13 +326,16 @@ _lthread_sched_event(struct lthread *lt, int fd, enum lthread_event e,
     } else if (e == LT_EV_WRITE) {
         st = LT_ST_WAIT_WRITE;
         _lthread_poller_ev_register_wr(fd);
-    } else
+    } else {
         assert(0);
+    }
 
     lt->state |= BIT(st);
     lt->fd_wait = FD_KEY(fd, e);
     lt_tmp = RB_INSERT(lthread_rb_wait, &lt->sched->waiting, lt);
     assert(lt_tmp == NULL);
+    if (timeout == -1)
+        return;
     _lthread_sched_sleep(lt, timeout);
     lt->fd_wait = -1;
     lt->state &= CLEARBIT(st);
