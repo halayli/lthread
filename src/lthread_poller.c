@@ -32,3 +32,37 @@
 #else
 #include "lthread_epoll.c"
 #endif
+
+#include "lthread_int.h"
+
+void
+_lthread_poller_set_fd_ready(struct lthread *lt, int fd, enum lthread_event e,
+    int is_eof)
+{
+    /* 
+     * not all scheduled fds in the poller are guaranteed to have triggered,
+     * deschedule them all and cancel events in poller so they don't trigger later.
+     */
+    int i;
+    if (lt->ready_fds == 0)
+        for (i = 0; i < lt->nfds; i++)
+            if (lt->pollfds[i].events & POLLIN) {
+                _lthread_poller_ev_clear_rd(lt->pollfds[i].fd);
+                _lthread_desched_event(lt->pollfds[i].fd, LT_EV_READ);
+            } else if (lt->pollfds[i].events & POLLOUT) {
+                _lthread_poller_ev_clear_wr(lt->pollfds[i].fd);
+                _lthread_desched_event(lt->pollfds[i].fd, LT_EV_WRITE);
+            }
+
+
+    lt->pollfds[lt->ready_fds].fd = fd;
+    if (e == LT_EV_WRITE)
+        lt->pollfds[lt->ready_fds].events = POLLOUT;
+    else
+        lt->pollfds[lt->ready_fds].events = POLLIN;
+
+    if (is_eof)
+        lt->pollfds[lt->ready_fds].events |= POLLHUP;
+
+    lt->ready_fds++;
+}

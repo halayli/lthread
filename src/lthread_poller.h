@@ -40,6 +40,9 @@
 #include <poll.h>
 
 struct lthread_sched;
+struct lthread;
+enum lthread_event;
+
 int _lthread_poller_create(void);
 int _lthread_poller_poll(struct timespec t);
 void _lthread_poller_ev_register_rd(int fd);
@@ -49,6 +52,8 @@ void _lthread_poller_ev_clear_rd(int fd);
 void _lthread_poller_ev_register_trigger(void);
 void _lthread_poller_ev_trigger(struct lthread_sched *sched);
 void _lthread_poller_ev_clear_trigger(void);
+void _lthread_poller_set_fd_ready(struct lthread *lt, int fd,
+    enum lthread_event, int is_eof);
 
 int _lthread_poller_ev_get_event(POLL_EVENT_TYPE *ev);
 int _lthread_poller_ev_get_fd(POLL_EVENT_TYPE *ev);

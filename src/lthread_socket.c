@@ -450,7 +450,6 @@ lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
         return poll(fds, nfds, 0);
 
     struct lthread *lt = lthread_get_sched()->current_lthread;
-    lt->ready_fds = 0;
     /* schedule fd events, pass -1 to avoid yielding */
     for (i = 0; i < nfds; i++) {
         if (fds[i].events & POLLIN)
@@ -461,6 +460,7 @@ lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
             assert(0);
     }
 
+    lt->ready_fds = 0;
     lt->fd_wait = -1;
     /* clear wait_read/write flags set by _lthread_sched_event */
     lt->state &= CLEARBIT(LT_ST_WAIT_READ);
@@ -468,22 +468,15 @@ lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
     /* we are waiting on multiple fd events */
     lt->state |= BIT(LT_ST_WAIT_MULTI);
 
+    lt->pollfds = fds;
+    lt->nfds = nfds;
+
     /* go to sleep until one or more of the fds are ready or until we timeout */
     _lthread_sched_sleep(lt, (uint64_t)timeout);
-    lt->state &= CLEARBIT(LT_ST_WAIT_MULTI);
 
-    /* 
-     * not all scheduled fds in the poller are guaranteed to have triggered,
-     * deschedule them all and cancel events in poller so they don't trigger later.
-     */
-    for (i = 0; i < nfds; i++)
-        if (fds[i].events & POLLIN) {
-            _lthread_poller_ev_clear_rd(fds[i].fd);
-            _lthread_desched_event(fds[i].fd, LT_EV_READ);
-        } else if (fds[i].events & POLLOUT) {
-            _lthread_poller_ev_clear_wr(fds[i].fd);
-            _lthread_desched_event(fds[i].fd, LT_EV_WRITE);
-        }
+    lt->pollfds = NULL;
+    lt->nfds = 0;
+    lt->state &= CLEARBIT(LT_ST_WAIT_MULTI);
 
     if (lt->state & BIT(LT_ST_EXPIRED))
         return (0);

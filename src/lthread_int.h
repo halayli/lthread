@@ -137,6 +137,8 @@ struct lthread {
     /* lthread_compute schduler - when running in compute block */
     struct lthread_compute_sched    *compute_sched;
     int ready_fds; /* # of fds that are ready. for poll(2) */
+    struct pollfd *pollfds;
+    nfds_t nfds;
 };
 
 RB_HEAD(lthread_rb_sleep, lthread);
