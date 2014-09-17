@@ -172,7 +172,7 @@ lthread_accept(int fd, struct sockaddr *addr, socklen_t *len)
 
 #ifndef __FreeBSD__
     if ((fcntl(ret, F_SETFL, O_NONBLOCK)) == -1) {
-        close(fd);
+        close(ret);
         perror("Failed to set socket properties");
         return (-1);
     }
