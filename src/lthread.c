@@ -515,6 +515,13 @@ lthread_detach(void)
 }
 
 void
+lthread_detach2(struct lthread *lt)
+{
+    lt->state |= BIT(LT_ST_DETACH);
+}
+
+
+void
 lthread_set_funcname(const char *f)
 {
     struct lthread *lt = lthread_get_sched()->current_lthread;
