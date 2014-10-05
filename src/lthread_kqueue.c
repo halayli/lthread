@@ -59,24 +59,20 @@ inline void
 _lthread_poller_ev_clear_rd(int fd)
 {
     struct kevent change;
-    struct kevent event;
-    struct timespec tm = {0, 0};
     struct lthread_sched *sched = lthread_get_sched();
 
     EV_SET(&change, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-    assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) == 1);
+    assert(kevent(sched->poller_fd, &change, 1, NULL, 0, NULL) != -1);
 }
 
 inline void
 _lthread_poller_ev_clear_wr(int fd)
 {
     struct kevent change;
-    struct kevent event;
-    struct timespec tm = {0, 0};
     struct lthread_sched *sched = lthread_get_sched();
 
     EV_SET(&change, fd, EVFILT_WRITE, EV_DELETE, 0, 0, NULL);
-    assert(kevent(sched->poller_fd, &change, 1, &event, 0, &tm) == 1);
+    assert(kevent(sched->poller_fd, &change, 1, NULL, 0, NULL) != -1);
 }
 
 inline void
