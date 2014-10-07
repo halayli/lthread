@@ -47,6 +47,19 @@
     #define FLAG | MSG_NOSIGNAL
 #endif
 
+
+#define LTHREAD_WAIT(fn, event)                                 \
+fn                                                              \
+{                                                               \
+    struct lthread *lt = lthread_get_sched()->current_lthread;  \
+    _lthread_sched_event(lt, fd, event, timeout_ms);            \
+    if (lt->state & BIT(LT_ST_FDEOF))                           \
+        return (-1);                                            \
+    if (lt->state & BIT(LT_ST_EXPIRED))                         \
+        return (-2);                                            \
+    return (0);                                                 \
+}
+
 #define LTHREAD_RECV(x, y)                                  \
 x {                                                         \
     ssize_t ret = 0;                                        \
@@ -290,6 +303,9 @@ err:
     close(fildes[1]);
     return (ret);
 }
+
+LTHREAD_WAIT(int lthread_wait_read(int fd, int timeout_ms), LT_EV_READ);
+LTHREAD_WAIT(int lthread_wait_write(int fd, int timeout_ms), LT_EV_WRITE);
 
 LTHREAD_RECV(
     ssize_t lthread_recv(int fd, void *buf, size_t length, int flags,

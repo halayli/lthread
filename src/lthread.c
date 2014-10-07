@@ -534,6 +534,12 @@ lthread_id(void)
     return (lthread_get_sched()->current_lthread->id);
 }
 
+struct lthread*
+lthread_self(void)
+{
+    return (lthread_get_sched()->current_lthread);
+}
+
 /*
  * convenience function for performance measurement.
  */
