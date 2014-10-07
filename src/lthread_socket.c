@@ -383,8 +383,7 @@ lthread_connect(int fd, struct sockaddr *name, socklen_t namelen,
             if (lt->state & BIT(LT_ST_EXPIRED))
                 return (-2);
             
-            ret = 0;
-            break;
+            continue;
         } else {
             break;
         }
