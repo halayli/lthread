@@ -211,6 +211,12 @@ lthread_close(int fd)
         lt->state |= BIT(LT_ST_FDEOF);
     }
 
+    /* clear the eof bit of the calling lthread */
+    lt = lthread_get_sched()->current_lthread;
+    if (lt->state & BIT(LT_ST_FDEOF)) {
+        lt->state &= CLEARBIT(LT_ST_FDEOF);
+    }
+
     /* closing fd removes its registered events from poller */ 
     return (close(fd));
 }
