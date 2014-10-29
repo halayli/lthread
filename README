@@ -119,7 +119,7 @@ void lthread_exit(void **ptr);
 
 ```C
 /*
- * Puts an lthread to sleep until msecs have passed.
+ * Puts an lthread to sleep until msecs have passed. msecs=0 yields.
  */
 void lthread_sleep(uint64_t msecs);
 ```

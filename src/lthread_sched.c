@@ -158,8 +158,8 @@ void
 lthread_run(void)
 {
     struct lthread_sched *sched;
-    struct lthread *lt = NULL, *lt_tmp = NULL;
-    struct lthread *lt_read = NULL, *lt_write = NULL;
+    struct lthread *lt = NULL;
+    struct lthread *lt_read = NULL, *lt_write = NULL, *lt_last_ready = NULL;
     int p = 0;
     int fd = 0;
     int is_eof = 0;
@@ -174,12 +174,17 @@ lthread_run(void)
         /* 1. start by checking if a sleeping thread needs to wakeup */
         _lthread_resume_expired(sched);
 
-        /* 2. check to see if we have any ready threads to run */
+        /* 2. check to see if we have any ready threads to run.
+         * if new lthreads got added to the ready queue in process, they'll
+         * run the next time we get here again.
+         */
+        lt_last_ready = TAILQ_LAST(&sched->ready, lthread_q);
         while (!TAILQ_EMPTY(&sched->ready)) {
-            TAILQ_FOREACH_SAFE(lt, &sched->ready, ready_next, lt_tmp) {
-                TAILQ_REMOVE(&lt->sched->ready, lt, ready_next);
-                _lthread_resume(lt);
-            }
+            lt = TAILQ_FIRST(&sched->ready);
+            TAILQ_REMOVE(&lt->sched->ready, lt, ready_next);
+            _lthread_resume(lt);
+            if (lt == lt_last_ready)
+                break;
         }
 
         /* 3. resume lthreads we received from lthread_compute, if any */
@@ -367,9 +372,13 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
         break;
     }
 
-    _lthread_yield(lt);
-    if (msecs > 0)
+    if (msecs > 0) {
+        _lthread_yield(lt);
         lt->state &= CLEARBIT(LT_ST_SLEEPING);
+    } else {
+        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
+    }
+
     lt->sleep_usecs = 0;
 }
 
