@@ -372,12 +372,10 @@ _lthread_sched_sleep(struct lthread *lt, uint64_t msecs)
         break;
     }
 
-    if (msecs > 0) {
-        _lthread_yield(lt);
+
+    _lthread_yield(lt);
+    if (msecs > 0)
         lt->state &= CLEARBIT(LT_ST_SLEEPING);
-    } else {
-        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
-    }
 
     lt->sleep_usecs = 0;
 }

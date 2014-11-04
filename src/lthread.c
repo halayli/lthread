@@ -446,7 +446,13 @@ void
 lthread_sleep(uint64_t msecs)
 {
     struct lthread *lt = lthread_get_sched()->current_lthread;
-    _lthread_sched_sleep(lt, msecs);
+
+    if (msecs == 0) {
+        TAILQ_INSERT_TAIL(&lt->sched->ready, lt, ready_next);
+        _lthread_yield(lt);
+    } else {
+        _lthread_sched_sleep(lt, msecs);
+    }
 }
 
 void
