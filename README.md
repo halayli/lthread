@@ -1,4 +1,4 @@
 lthread
 =======
 
-[Docs](http://lthread.readthedocs.org/en/latest/lthread.html)
+[Docs](http://lthread.readthedocs.org/en/latest/intro.html)
