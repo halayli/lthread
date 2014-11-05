@@ -5,7 +5,7 @@ lthread is a multicore/multithread coroutine library written in C. It uses [Sam 
 
 lthreads are created in userspace and don't require kernel intervention, they are light weight and ideal for socket programming. Each lthread have separate stack, and  the stack is madvise(2)-ed to save space, allowing you to create thousands(tested with a million lthreads) of coroutines and maintain a low memory footprint. The scheduler is hidden from the user and is created automagically in each pthread, allowing the user to take advantage of cpu cores and distribute the load by creating several pthreads, each running it's own lthread scheduler and handling its own share of coroutines. Locks are necessary when accessing global variables from lthreads running in different pthreads, and lthreads must not block on pthread condition variables as this will block the whole lthread scheduler in the pthread.
 
-.. image:: https://github.com/halayli/lthread/blob/master/images/lthread_scheduler.png?raw=true
+.. image:: images/lthread_scheduler.png
 
 To run an lthread scheduler in each pthread, launch a pthread and create lthreads using lthread_create() followed by lthread_run() in each pthread.
 
