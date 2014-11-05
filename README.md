@@ -1,1 +1,4 @@
-README
+lthread
+=======
+
+[Docs](http://lthread.readthedocs.org/en/latest/lthread.html)

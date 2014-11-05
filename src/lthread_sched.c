@@ -97,6 +97,7 @@ _lthread_poll(void)
         else
             t.tv_nsec = usecs * 1000u;
     } else {
+        return 0;
         t.tv_nsec = 0;
         t.tv_sec = 0;
     }
@@ -188,7 +189,7 @@ lthread_run(void)
         }
 
         /* 3. resume lthreads we received from lthread_compute, if any */
-        while (1) {
+        while (!TAILQ_EMPTY(&sched->defer)) {
             assert(pthread_mutex_lock(&sched->defer_mutex) == 0);
             lt = TAILQ_FIRST(&sched->defer);
             if (lt == NULL) {
@@ -206,6 +207,7 @@ lthread_run(void)
 
         /* 5. fire up lthreads that are ready to run */
         while (sched->num_new_events) {
+            printf("NEVER!\n");
             p = --sched->num_new_events;
 
             fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
@@ -406,10 +408,7 @@ _lthread_resume_expired(struct lthread_sched *sched)
     /* current scheduler time */
     t_diff_usecs = _lthread_diff_usecs(sched->birth, _lthread_usec_now());
 
-    while (1) {
-        lt = RB_MIN(lthread_rb_sleep, &sched->sleeping);
-        if (lt == NULL)
-            break;
+    while ((lt = RB_MIN(lthread_rb_sleep, &sched->sleeping)) != NULL) {
 
         if (lt->sleep_usecs <= t_diff_usecs) {
             _lthread_cancel_event(lt);

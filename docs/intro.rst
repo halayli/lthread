@@ -18,12 +18,16 @@ If you need to execute an expensive computation or make a blocking call inside a
 Installation
 ------------
 
-Currently, lthread is supported on FreeBSD, OS X,  and Linux.
+Currently, lthread is supported on FreeBSD, OS X, and Linux (x86 & 64bit arch).
 
 To build and install, simply:
 
+.. code-block:: Shell
+
     cmake .
     sudo make install
+
+::
 
 Linking
 -------
