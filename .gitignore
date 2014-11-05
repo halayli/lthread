@@ -15,3 +15,6 @@ Makefile.in
 missing
 src/.deps
 src/.libs
+*.DS_Store
+*.swp
+build*
