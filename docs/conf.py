@@ -175,6 +175,10 @@ html_static_path = ['_static']
 # This is the file name suffix for HTML files (e.g. ".xhtml").
 #html_file_suffix = None
 
+html_context = {
+  'analytics_code': 'UA-56520983-1'
+}
+
 # Output file base name for HTML help builder.
 htmlhelp_basename = 'Lthreaddoc'
 
