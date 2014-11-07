@@ -33,7 +33,9 @@ lthread_connect
 
     lthread version of connect(2) with additional timeout parameter.
 
-    :return: new fd > 0 on success, -1 on failure, -2 on timeout.
+    :return: new fd > 0 on success.
+    :return: -1 on failure.
+    :return: -2 on timeout.
 
 lthread_recv
 ------------
@@ -49,15 +51,27 @@ lthread_read
 
     lthread version of read(2), with additional timeout parameter.
 
-    :return: Returns number of bytes read, -1 on failure and -2 on timeout.
+    :return: Returns number of bytes read.
+    :return: 0 if socket is closed.
+    :return: -1 on failure.
+    :return: -2 on timeout.
+
 
 lthread_readline
 ----------------
 .. c:function:: ssize_t lthread_readline(int fd, char **buf, size_t max, uint64_t timeout)
 
-    Keeps reading from fd until it hits a \n or `max` bytes.
+    Keeps reading from fd until it hits a \\n or `max` bytes.
 
-    :return: Number of bytes read, -1 on failure and -2 on timeout.
+    :param int fd: file descriptor.
+    :param char **buf: Ptr->ptr that will contain the line read(must be freed).
+    :param size_t max: Maximum number of bytes to read before finding \\n.
+    :param timeout:  Milliseconds to wait on reading before timing out.
+
+    :return: Number of bytes read.
+    :return: 0 if socket is closed.
+    :return: -1 on failure.
+    :return: -2 on timeout.
 
 lthread_recv_exact
 ------------------
@@ -65,7 +79,11 @@ lthread_recv_exact
 
     Blocks until exact number of bytes are read.
 
-    :return: Number of bytes read, -1 on failure and -2 on timeout.
+    :return: Number of bytes read.
+    :return: 0 if socket is closed.
+    :return: -1 on failure.
+    :return: -2 on timeout.
+
 
 lthread_read_exact
 ------------------
@@ -73,7 +91,11 @@ lthread_read_exact
 
     Blocks until exact number of bytes are read.
 
-    :return: Number of bytes read, -1 on failure and -2 on timeout.
+    :return: Number of bytes read.
+    :return: 0 if socket is closed.
+    :return: -1 on failure.
+    :return: -2 on timeout.
+
 
 lthread_recvmsg
 ---------------
@@ -91,7 +113,11 @@ lthread_recvfrom
 
     lthread version of recvfrom(2). `man 2 recvfrom` for more details.
 
-    :return: Returns number of bytes read, -1 on failure and -2 on timeout.
+    :return: Returns number of bytes read.
+    :return: 0 if socket is closed.
+    :return: -1 on failure.
+    :return: -2 on timeout.
+
 
 lthread_send
 --------------
@@ -131,7 +157,8 @@ lthread_wait_read
 
     Waits for an fd to become readable.
 
-    :return: 0 on success, or -2 on timeout.
+    :return: 0 on success.
+    :return: -2 on timeout.
 
 
 lthread_wait_write
@@ -140,4 +167,5 @@ lthread_wait_write
 
     Waits for an fd to become writable.
 
-    :return: 0 on success, or -2 on timeout.
+    :return: 0 on success.
+    :return: -2 on timeout.

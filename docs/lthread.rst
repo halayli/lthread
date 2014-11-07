@@ -3,7 +3,7 @@ Lthread
 
 lthread_create
 --------------
-.. c:function:: lthread_create(lthread_t **new_lt, lthread_func func, void *arg)
+.. c:function:: int thread_create(lthread_t **new_lt, lthread_func func, void *arg)
 
     Creates a new lthread.
 
@@ -11,14 +11,15 @@ lthread_create
                                success
     :param lthread_func func: Function to run in an lthread.
     :param void* arg: Argument to pass to `func` when called.
-    :return: 0 on success with new_lt pointing to the new lthread,
-             -1 on failure with `errno` specifying the reason.
+
+    :return: 0 on success with new_lt pointing to the new lthread.
+    :return: -1 on failure with `errno` specifying the reason.
 
     .. c:type:: lthread_func: void (*)(void*)
 
 lthread_sleep
 --------------
-.. c:function:: lthread_sleep(uint64_t msecs)
+.. c:function:: void lthread_sleep(uint64_t msecs)
 
     Causes an lthread to sleep for `msecs` milliseconds.
 
@@ -57,7 +58,9 @@ lthread_join
     :param void** ptr: optional, this ptr will be populated by :c:func:`lthread_exit()`.
     :param uint64_t timeout: How long to wait trying to join on lt before timing out.
 
-    return: 0 on success, -1 on cancelled target lthread, -2 on timeout.
+    :return: 0 on success.
+    :return: -1 if target lthread got cancelled.
+    :return: -2 on timeout.
 
     .. ATTENTION:: Joining on a joined lthread has undefined behavior
 
@@ -106,7 +109,8 @@ lthread_cond_create
 
      :param lthread_cond_t** c: ptr->ptr that will be populated on success.
 
-     :return: 0 on success -1 on error with `errno` containing the reason.
+     :return: 0 on success.
+     :return: -1 on error with `errno` containing the reason.
 
 
 lthread_cond_wait
@@ -122,7 +126,8 @@ lthread_cond_wait
                              variable to be signaled before it times out. 0 to
                              wait indefinitely.
 
-    :return: 0 if it was signal or -2 if it timed out waiting.
+    :return: 0 if it was signal.
+    :return: -2 on timeout.
 
 lthread_cond_signal
 -------------------
@@ -155,7 +160,7 @@ lthread_set_data
 
 lthread_get_data
 ----------------
-.. c:function:: void *lthread_get_data(void);
+.. c:function:: void *lthread_get_data(void)
 
     Returns the value set for the current lthread.
 
@@ -164,7 +169,7 @@ lthread_get_data
 
 lthread_current
 ---------------
-.. c:function:: lthread_t *lthread_current();
+.. c:function:: lthread_t *lthread_current()
 
     Returns a pointer to the current lthread.
 
@@ -178,12 +183,15 @@ lthread_compute_begin
     Resumes lthread inside a pthread to run expensive computations or make a
     blocking call like `gethostbyname()`. This call *must* be followed by
     :c:func:`lthread_compute_end()` after the computation and/or blocking calls
-    have been made to resume the lthread in its original lthread scheduler.
+    statements have been made, to resume the lthread in its original lthread scheduler.
     No lthread_* calls can be made during the 2 calls.
+
+    :return: 0 on success.
+    :return: -1 if lthread failed to resume it in a pthread.
 
 lthread_compute_end
 -------------------
-.. c:function:: void lthread_compute_end(void);
+.. c:function:: void lthread_compute_end(void)
 
     Moves lthread from pthread back to the lthread scheduler it was running on.
 
