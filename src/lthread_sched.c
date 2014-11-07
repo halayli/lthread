@@ -207,7 +207,6 @@ lthread_run(void)
 
         /* 5. fire up lthreads that are ready to run */
         while (sched->num_new_events) {
-            printf("NEVER!\n");
             p = --sched->num_new_events;
 
             fd = _lthread_poller_ev_get_fd(&sched->eventlist[p]);
