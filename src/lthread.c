@@ -467,6 +467,13 @@ _lthread_renice(struct lthread *lt)
 }
 
 void
+lthread_renice()
+{
+    struct lthread *lt = lthread_get_sched()->current_lthread;
+    _lthread_renice(lt);
+}
+
+void
 lthread_wakeup(struct lthread *lt)
 {
     if (lt->state & BIT(LT_ST_SLEEPING)) {
@@ -555,4 +562,18 @@ lthread_print_timestamp(char *msg)
 	struct timeval t1 = {0, 0};
     gettimeofday(&t1, NULL);
 	printf("lt timestamp: sec: %ld usec: %ld (%s)\n", t1.tv_sec, (long) t1.tv_usec, msg);
+}
+
+int
+lthread_is_lthread_context()
+{
+    assert(pthread_once(&key_once, _lthread_key_create) == 0);
+    struct lthread_sched* sched = lthread_get_sched();
+    return (NULL != sched && NULL != sched->current_lthread);
+}
+
+int
+lthread_is_eventfd(int fd)
+{
+    return (fd == lthread_get_sched()->eventfd);
 }

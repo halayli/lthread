@@ -60,6 +60,7 @@ void    lthread_detach2(lthread_t *lt);
 void    lthread_exit(void *ptr);
 void    lthread_sleep(uint64_t msecs);
 void    lthread_wakeup(lthread_t *lt);
+void    lthread_renice();
 int     lthread_cond_create(lthread_cond_t **c);
 int     lthread_cond_wait(lthread_cond_t *c, uint64_t timeout);
 void    lthread_cond_signal(lthread_cond_t *c);
@@ -104,6 +105,8 @@ int     lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
 #endif
 ssize_t lthread_io_write(int fd, void *buf, size_t nbytes);
 ssize_t lthread_io_read(int fd, void *buf, size_t nbytes);
+int     lthread_is_lthread_context();
+int     lthread_is_eventfd(int fd);
 
 int lthread_compute_begin(void);
 void lthread_compute_end(void);
