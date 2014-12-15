@@ -169,3 +169,15 @@ lthread_wait_write
 
     :return: 0 on success.
     :return: -2 on timeout.
+
+lthread_poll
+------------
+.. c:function:: int lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
+
+    Lthread version of poll(2)
+
+    :return: -1 on poll(2) error (when timeout == 0).
+    :return: 0 on timeout.
+    :return: > 0 to indicate the # of fds returned.
+
+    .. note:: If timeout == 0, poll(2) is called directly and the lthread never goes to sleep.
