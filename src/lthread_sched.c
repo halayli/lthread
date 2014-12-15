@@ -224,19 +224,29 @@ lthread_run(void)
             if (is_eof)
                 errno = ECONNRESET;
 
-            lt_read = _lthread_desched_event(fd, LT_EV_READ);
-            if (lt_read != NULL) {
-                if (is_eof)
-                    lt_read->state |= BIT(LT_ST_FDEOF);
-                _lthread_resume(lt_read);
-            }
+        #define HANDLE_EV(lt_wr, ev)                                                \
+            lt_wr = _lthread_desched_event(fd, ev);                                 \
+            if (lt_wr != NULL) {                                                    \
+                                                                                    \
+                if (!(lt_wr->state & BIT(LT_ST_WAIT_MULTI))) {                      \
+                    if (is_eof)                                                     \
+                        lt_wr->state |= BIT(LT_ST_FDEOF);                           \
+                    _lthread_resume(lt_wr);                                         \
+                } else {                                                            \
+                    /*                                                              \
+                     * this lthread was waiting on multiple events, increment       \
+                     * ready_fds and place it on the ready queue to resume after we \
+                     * finished counting all ready fds that the lthread was waiting \
+                     * on. This is to emulate poll(2) return call.                  \
+                     */                                                             \
+                    if (lt_wr->ready_fds == 0)                                      \
+                        TAILQ_INSERT_TAIL(&sched->ready, lt_wr, ready_next);        \
+                    _lthread_poller_set_fd_ready(lt_wr, fd, ev, is_eof);            \
+                }                                                                   \
+            }                                                                       \
 
-            lt_write = _lthread_desched_event(fd, LT_EV_WRITE);
-            if (lt_write != NULL) {
-                if (is_eof)
-                    lt_write->state |= BIT(LT_ST_FDEOF);
-                _lthread_resume(lt_write);
-            }
+            HANDLE_EV(lt_read, LT_EV_READ);
+            HANDLE_EV(lt_write, LT_EV_WRITE);
             is_eof = 0;
 
             assert(lt_write != NULL || lt_read != NULL);
@@ -265,8 +275,7 @@ _lthread_cancel_event(struct lthread *lt)
     }
 
     if (lt->fd_wait >= 0)
-        _lthread_desched_event(FD_ONLY(lt->fd_wait),
-            FD_EVENT(lt->fd_wait));
+        _lthread_desched_event(FD_ONLY(lt->fd_wait), FD_EVENT(lt->fd_wait));
     lt->fd_wait = -1;
 }
 
@@ -318,13 +327,16 @@ _lthread_sched_event(struct lthread *lt, int fd, enum lthread_event e,
     } else if (e == LT_EV_WRITE) {
         st = LT_ST_WAIT_WRITE;
         _lthread_poller_ev_register_wr(fd);
-    } else
+    } else {
         assert(0);
+    }
 
     lt->state |= BIT(st);
     lt->fd_wait = FD_KEY(fd, e);
     lt_tmp = RB_INSERT(lthread_rb_wait, &lt->sched->waiting, lt);
     assert(lt_tmp == NULL);
+    if (timeout == -1)
+        return;
     _lthread_sched_sleep(lt, timeout);
     lt->fd_wait = -1;
     lt->state &= CLEARBIT(st);

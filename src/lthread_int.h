@@ -96,7 +96,8 @@ enum lthread_st {
     LT_ST_PENDING_RUNCOMPUTE, /* lthread needs to run in compute sched, step1 */
     LT_ST_RUNCOMPUTE,   /* lthread needs to run in compute sched (2), step2 */
     LT_ST_WAIT_IO_READ, /* lthread waiting for READ IO to finish */
-    LT_ST_WAIT_IO_WRITE /* lthread waiting for WRITE IO to finish */
+    LT_ST_WAIT_IO_WRITE,/* lthread waiting for WRITE IO to finish */
+    LT_ST_WAIT_MULTI    /* lthread waiting on multiple fds */
 };
 
 struct lthread {
@@ -135,6 +136,9 @@ struct lthread {
     } io;
     /* lthread_compute schduler - when running in compute block */
     struct lthread_compute_sched    *compute_sched;
+    int ready_fds; /* # of fds that are ready. for poll(2) */
+    struct pollfd *pollfds;
+    nfds_t nfds;
 };
 
 RB_HEAD(lthread_rb_sleep, lthread);

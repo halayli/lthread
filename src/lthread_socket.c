@@ -34,6 +34,7 @@
 #include <netinet/tcp.h>
 #include <sys/types.h>
 #include <sys/uio.h>
+#include <assert.h>
 
 #include <sys/socket.h>
 #include <fcntl.h>
@@ -454,3 +455,46 @@ lthread_sendfile(int fd, int s, off_t offset, size_t nbytes,
     } while (1);
 }
 #endif
+
+
+int
+lthread_poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+    int i = 0;
+    if (timeout == 0)
+        return poll(fds, nfds, 0);
+
+    struct lthread *lt = lthread_get_sched()->current_lthread;
+    /* schedule fd events, pass -1 to avoid yielding */
+    for (i = 0; i < nfds; i++) {
+        if (fds[i].events & POLLIN)
+            _lthread_sched_event(lt, fds[i].fd, LT_EV_READ, -1);
+        else if (fds[i].events & POLLOUT)
+            _lthread_sched_event(lt, fds[i].fd, LT_EV_WRITE, -1);
+        else
+            assert(0);
+    }
+
+    lt->ready_fds = 0;
+    lt->fd_wait = -1;
+    /* clear wait_read/write flags set by _lthread_sched_event */
+    lt->state &= CLEARBIT(LT_ST_WAIT_READ);
+    lt->state &= CLEARBIT(LT_ST_WAIT_WRITE);
+    /* we are waiting on multiple fd events */
+    lt->state |= BIT(LT_ST_WAIT_MULTI);
+
+    lt->pollfds = fds;
+    lt->nfds = nfds;
+
+    /* go to sleep until one or more of the fds are ready or until we timeout */
+    _lthread_sched_sleep(lt, (uint64_t)timeout);
+
+    lt->pollfds = NULL;
+    lt->nfds = 0;
+    lt->state &= CLEARBIT(LT_ST_WAIT_MULTI);
+
+    if (lt->state & BIT(LT_ST_EXPIRED))
+        return (0);
+
+    return (lt->ready_fds);
+}
