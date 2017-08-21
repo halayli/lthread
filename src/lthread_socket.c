@@ -65,6 +65,8 @@ fn                                                              \
 x {                                                         \
     ssize_t ret = 0;                                        \
     struct lthread *lt = lthread_get_sched()->current_lthread;   \
+                                                            \
+    lt->state &= CLEARBIT(LT_ST_FDEOF);                     \
     while (1) {                                             \
         if (lt->state & BIT(LT_ST_FDEOF))                   \
             return (-1);                                    \
@@ -88,6 +90,7 @@ x {                                                         \
     ssize_t recvd = 0;                                      \
     struct lthread *lt = lthread_get_sched()->current_lthread;   \
                                                             \
+    lt->state &= CLEARBIT(LT_ST_FDEOF);                     \
     while (recvd != length) {                               \
         if (lt->state & BIT(LT_ST_FDEOF))                   \
             return (-1);                                    \
