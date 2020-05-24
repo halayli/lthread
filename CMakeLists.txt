@@ -18,7 +18,7 @@ set_property(SOURCE ${lthread_files} PROPERTY COMPILE_FLAGS "-O2")
 install(TARGETS lthread DESTINATION lib)
 install(FILES src/lthread.h DESTINATION include)
 
-set(UNIT_TEST_PATH ${CMAKE_SOURCE_DIR}/tests)
+set(UNIT_TEST_PATH ${CMAKE_BINARY_DIR}/tests)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${UNIT_TEST_PATH})
 include_directories(src)
 
@@ -31,6 +31,14 @@ target_link_libraries(lthread_io lthread pthread)
 add_executable(lthread_join tests/lthread_join.c)
 target_link_libraries(lthread_join lthread pthread)
 
+add_executable(lthread_fdeof_read tests/lthread_fdeof_read.c)
+target_link_libraries(lthread_fdeof_read  lthread pthread)
+
+add_executable(lthread_fdeof_write tests/lthread_fdeof_write.c)
+target_link_libraries(lthread_fdeof_write  lthread pthread)
+
 enable_testing()
 add_test(lthread_sleep ${UNIT_TEST_PATH}/lthread_sleep)
 add_test(lthread_join ${UNIT_TEST_PATH}/lthread_join)
+add_test(lthread_fdeof_read ${UNIT_TEST_PATH}/lthread_fdeof_read)
+add_test(lthread_fdeof_write ${UNIT_TEST_PATH}/lthread_fdeof_write)
