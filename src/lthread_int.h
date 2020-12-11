@@ -134,7 +134,7 @@ struct lthread {
         int ret;
         int err;
     } io;
-    /* lthread_compute schduler - when running in compute block */
+    /* lthread_compute scheduler - when running in compute block */
     struct lthread_compute_sched    *compute_sched;
     int ready_fds; /* # of fds that are ready. for poll(2) */
     struct pollfd *pollfds;
