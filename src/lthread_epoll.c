@@ -50,7 +50,7 @@ _lthread_poller_poll(struct timespec t)
 inline void
 _lthread_poller_ev_clear_rd(int fd)
 {
-    struct epoll_event ev;
+    struct epoll_event ev = {0};
     int ret = 0;
     struct lthread_sched *sched = lthread_get_sched();
 
@@ -63,7 +63,7 @@ _lthread_poller_ev_clear_rd(int fd)
 inline void
 _lthread_poller_ev_clear_wr(int fd)
 {
-    struct epoll_event ev;
+    struct epoll_event ev = {0};
     int ret = 0;
     struct lthread_sched *sched = lthread_get_sched();
 
@@ -76,7 +76,7 @@ _lthread_poller_ev_clear_wr(int fd)
 inline void
 _lthread_poller_ev_register_rd(int fd)
 {
-    struct epoll_event ev;
+    struct epoll_event ev = {0};
     int ret = 0;
     struct lthread_sched *sched = lthread_get_sched();
 
@@ -91,7 +91,7 @@ _lthread_poller_ev_register_rd(int fd)
 inline void
 _lthread_poller_ev_register_wr(int fd)
 {
-    struct epoll_event ev;
+    struct epoll_event ev = {0};
     int ret = 0;
     struct lthread_sched *sched = lthread_get_sched();
 
@@ -138,7 +138,7 @@ _lthread_poller_ev_register_trigger(void)
 {
     struct lthread_sched *sched = lthread_get_sched();
     int ret = 0;
-    struct epoll_event ev;
+    struct epoll_event ev = {0};
 
     if (!sched->eventfd) {
         sched->eventfd = eventfd(0, EFD_NONBLOCK);
